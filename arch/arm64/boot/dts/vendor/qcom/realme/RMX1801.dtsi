@@ -34,6 +34,10 @@
                 fsmgr_flags = "wait";
             };
         };
+
+        vbmeta {
+            status = "disabled";
+        };
     };
 };
 
