@@ -83,7 +83,7 @@
                            4 = active high level-sensitive
                            8 = active low level-sensitive */
 		interrupt-names = "nfc_irq";
-		clocks = <&clock_rpmcc RPM_LN_BB_CLK3_PIN>;
+		clocks = <&clock_rpmcc RPM_SMD_LN_BB_CLK3_PIN>;
 		clock-names = "ref_clk";
 	};
 };

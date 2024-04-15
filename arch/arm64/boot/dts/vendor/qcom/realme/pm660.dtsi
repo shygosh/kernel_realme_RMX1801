@@ -170,8 +170,6 @@
 
 &spmi_bus {
     qcom,pm660@0 {
-        /delete-node/ bcl@4200;
-
         qcom,power-on@800 {
             qcom,clear-warm-reset;
         };
@@ -192,21 +190,23 @@
 };
 
 /* Diff with msm-pm660l.dtsi */
-&green_led{
-    linux,name = "button-backlight";
-};
+&pm660l_rgb_led {
+    green {
+        label = "button-backlight";
+    };
 
-&blue_led{
-    qcom,max-current = <3>;
-    qcom,start-idx = <1>;
-    qcom,duty-pcts = [00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14];
-    qcom,lut-flags = <0x1f>;
-    qcom,pause-lo = <2000>;
-    qcom,pause-hi = <700>;
-    qcom,ramp-step-ms = <35>;
-    qcom,ratio = <20>;
-    qcom,use-blink;
-    linux,name = "white";
+    blue {
+        qcom,max-current = <3>;
+        qcom,start-idx = <1>;
+        qcom,duty-pcts = [00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14];
+        qcom,lut-flags = <0x1f>;
+        qcom,pause-lo = <2000>;
+        qcom,pause-hi = <700>;
+        qcom,ramp-step-ms = <35>;
+        qcom,ratio = <20>;
+        qcom,use-blink;
+        label = "white";
+    };
 };
 
 &pm660l_wled{
