@@ -43,6 +43,10 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 		mmc_hostname(host), present, present?"INSERT":"REMOVAL");
 
 	host->trigger_card_event = true;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+	host->card_stuck_in_programing_status = false;
+#endif
 	mmc_detect_change(host, msecs_to_jiffies(ctx->cd_debounce_delay_ms));
 
 	return IRQ_HANDLED;

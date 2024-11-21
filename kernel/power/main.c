@@ -843,6 +843,55 @@ power_attr(pm_freeze_timeout);
 
 #endif	/* CONFIG_FREEZER*/
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* OPPO 2012-11-05 heiwei Modify begin for add interface start reason and boot_mode */
+extern char pwron_event[];
+/* fanhui@PhoneSW.BSP, 2016/05/16, interface to read PMIC reg PON_REASON and POFF_REASON */
+char pon_reason[128];
+char poff_reason[128];
+
+static ssize_t startup_mode_show(struct kobject *kobj, struct kobj_attribute *attr,
+			     char *buf)
+{
+	return sprintf(buf, "%s", pwron_event);
+}
+
+static ssize_t startup_mode_store(struct kobject *kobj, struct kobj_attribute *attr,
+			   const char *buf, size_t n)
+{
+	return 0;
+}
+power_attr(startup_mode);
+
+static ssize_t pon_reason_show(struct kobject *kobj,
+			struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s", pon_reason);
+}
+
+static ssize_t pon_reason_store(struct kobject *kobj,
+			struct kobj_attribute *attr,
+			const char *buf, size_t n)
+{
+	return -EINVAL;
+}
+power_attr(pon_reason);
+
+static ssize_t poff_reason_show(struct kobject *kobj,
+	struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s", poff_reason);
+}
+
+static ssize_t poff_reason_store(struct kobject *kobj,
+			struct kobj_attribute *attr,
+			const char *buf, size_t n)
+{
+	return -EINVAL;
+}
+power_attr(poff_reason);
+#endif
+
 static struct attribute * g[] = {
 	&state_attr.attr,
 #ifdef CONFIG_PM_TRACE
@@ -871,6 +920,13 @@ static struct attribute * g[] = {
 #endif
 #ifdef CONFIG_FREEZER
 	&pm_freeze_timeout_attr.attr,
+#endif
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* OPPO 2012-11-05 heiwei Modify begin for add interface start reason and boot_mode */
+	&startup_mode_attr.attr,
+/* fanhui@PhoneSW.BSP, 2016/05/16, interface to read PMIC reg PON_REASON and POFF_REASON */
+	&pon_reason_attr.attr,
+	&poff_reason_attr.attr,
 #endif
 	NULL,
 };
