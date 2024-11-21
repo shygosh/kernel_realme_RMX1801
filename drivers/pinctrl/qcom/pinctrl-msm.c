@@ -511,6 +511,32 @@ static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 #ifdef CONFIG_DEBUG_FS
 #include <linux/seq_file.h>
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	static const char * const values[] = {
+		"high",
+		"low"
+	};
+	
+	static const char * const intr_enables[] = {
+		"int_disable",
+		"int_enabe"
+	};
+	
+	static const char * const intr_polaritys[] = {
+		"active-low-",
+		"active-high-"
+	};
+
+	
+	static const char * const intr_detections[] = {
+		"level",
+		"pos_edge",
+		"neg_edge",
+		"dual_edge"
+	};
+	
+#endif
+
 static void msm_gpio_dbg_show_one(struct seq_file *s,
 				  struct pinctrl_dev *pctldev,
 				  struct gpio_chip *chip,
@@ -525,6 +551,14 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 	int pull;
 	int val;
 	u32 ctl_reg, io_reg;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	int in_value;
+	int out_value;
+	int intr_enable;
+	int intr_polarity;
+	int intr_detection;
+	u32 intr_cfg_reg;
+#endif
 
 	static const char * const pulls_keeper[] = {
 		"no pull",
@@ -533,11 +567,13 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 		"pull up"
 	};
 
+#ifndef CONFIG_OPPO_VENDOR_EDIT
 	static const char * const pulls_no_keeper[] = {
 		"no pull",
 		"pull down",
 		"pull up",
 	};
+#endif
 
 	if (!gpiochip_line_is_valid(chip, offset))
 		return;
@@ -556,6 +592,33 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 	else
 		val = !!(io_reg & BIT(g->in_bit));
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	printk("  g->in_bit = %x,g->on_bit = %x,  g->intr_enable = %d,g->intr_polarity = %d, intr_detection = %d\n",
+	       g->in_bit, g->out_bit,g->intr_enable_bit,g->intr_polarity_bit,g->intr_detection_bit);
+	io_reg = readl(pctrl->regs + g->io_reg);
+	intr_cfg_reg = readl(pctrl->regs + g->intr_cfg_reg);
+
+	in_value = (io_reg >> g->in_bit) & 1;
+	out_value = (io_reg >> g->out_bit) & 1;
+	intr_enable = (intr_cfg_reg >> g->intr_enable_bit) & 1;
+	intr_polarity = (intr_cfg_reg >> g->intr_polarity_bit) & 1;
+	intr_detection = (intr_cfg_reg >> g->intr_detection_bit) & 3;
+
+	seq_printf(s, " %-8s: ", g->name);
+	seq_printf(s, " %d  ", func);
+
+	if(is_out)
+		seq_printf(s, "out(%-4s)",values[out_value]);
+	else
+		seq_printf(s, "in (%-4s)",values[in_value]);
+
+	seq_printf(s, " %dmA", msm_regval_to_drive(drive));
+	seq_printf(s, " %-9s", pulls_keeper[pull]);
+	seq_printf(s, " %-11s", intr_enables[intr_enable]);
+	seq_printf(s, " %s%s", intr_polaritys[intr_polarity], intr_detections[intr_detection]);	
+#endif
+
+#ifndef CONFIG_OPPO_VENDOR_EDIT
 	seq_printf(s, " %-8s: %-3s", g->name, is_out ? "out" : "in");
 	seq_printf(s, " %-4s func%d", val ? "high" : "low", func);
 	seq_printf(s, " %dmA", msm_regval_to_drive(drive));
@@ -563,6 +626,7 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 		seq_printf(s, " %s", pulls_no_keeper[pull]);
 	else
 		seq_printf(s, " %s", pulls_keeper[pull]);
+#endif
 	seq_puts(s, "\n");
 }
 

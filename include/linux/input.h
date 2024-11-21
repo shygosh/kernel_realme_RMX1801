@@ -43,6 +43,16 @@ enum input_clock_type {
 	INPUT_CLK_MAX
 };
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+//Tong.Han@Bsp.Group.Tp,2017/2/27,Modify for shortcut function.
+struct keyup_data {
+	u8 keyup_bits;
+	unsigned long keyup_flag;
+	unsigned int keyup_delay;
+	struct timer_list keyup_timer;
+};
+#endif
+
 /**
  * struct input_dev - represents an input device
  * @name: name of the device
@@ -161,6 +171,10 @@ struct input_dev {
 
 	unsigned int repeat_key;
 	struct timer_list timer;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	//Tong.Han@Bsp.Group.Tp,2017/2/27,Modify for shortcut function.
+	struct keyup_data keyup_data;
+#endif
 
 	int rep[REP_CNT];
 

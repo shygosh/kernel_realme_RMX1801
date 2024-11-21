@@ -5,6 +5,9 @@
 #
 mainmenu "Linux/$(ARCH) $(KERNELVERSION) Kernel Configuration"
 
+config OPPO_VENDOR_EDIT
+	bool "OPPO vendor edit"
+
 source "scripts/Kconfig.include"
 
 source "init/Kconfig"
