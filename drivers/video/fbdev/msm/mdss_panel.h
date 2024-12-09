@@ -306,6 +306,10 @@ enum mdss_intf_events {
 	MDSS_EVENT_REGISTER_CLAMP_HANDLER,
 	MDSS_EVENT_DSI_DYNAMIC_BITCLK,
 	MDSS_EVENT_UPDATE_LIVEDISPLAY,
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Shengjun.Gou@PSW.MM.Display.LCD.Feature, 2018/01/03, add for dynamic mipi dsi clk
+	MDSS_EVENT_PANEL_UPDATE_DSI_TIMING,
+#endif
 	MDSS_EVENT_MAX,
 };
 
@@ -810,6 +814,11 @@ struct mdss_panel_info {
 	int pwm_lpg_chan;
 	int pwm_period;
 	bool dynamic_fps;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Shengjun.Gou@PSW.MM.Display.LCD.Feature, 2018/01/03, add for dynamic mipi dsi clk
+	bool dynamic_dsitiming;
+	u32  cached_clk_rate;
+#endif
 	bool dynamic_bitclk;
 	u32 *supp_bitclks;
 	u32 supp_bitclk_len;
@@ -1015,6 +1024,11 @@ struct mdss_panel_data {
 
 	int panel_te_gpio;
 	struct completion te_done;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Mark.Yao@PSW.MM.Display.LCD.Stable,2018-09-06 add for fingerprint hbm
+	int oppo_fingerprint_hbm_mode;
+	int sysfs_hbm_mode;
+#endif
 };
 
 struct mdss_panel_debugfs_info {

@@ -146,6 +146,28 @@ enum dsi_pm_type {
 	DSI_MAX_PM
 };
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/*
+* Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/12,
+* add for panel vendor check
+*/
+enum OPPO_LCD{
+	OPPO16103_JDI_R63452_1080P_CMD_PANEL,
+	OPPO16051_SAMSUNG_S6E3FA5_1080P_CMD_PANEL,
+	OPPO16118_SAMSUNG_S6E3FA5_1080P_CMD_PANEL,
+	OPPO17011_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL,
+	OPPO17021_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL,
+	OPPO17081_SAMSUNG_AMS596W401_1080P_CMD_PANEL,
+	OPPO18136_HIMAX_NT36772A_1080_2340_VOD_PANEL,
+	OPPO18136_HIMAX_HX83112A_1080_2340_VOD_PANEL,
+	OPPO18321_DPT_NT36672A_1080_2340_VOD_PANEL,
+	OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL,
+	LCD_UNKNOW,
+};
+typedef enum OPPO_LCD OPPO_LCD;
+int is_lcd(OPPO_LCD lcd_num);
+#endif
+
 /*
  * DSI controller states.
  *	CTRL_STATE_UNKNOWN - Unknown state of DSI controller.
@@ -447,6 +469,12 @@ struct mdss_dsi_ctrl_pdata {
 	int rst_gpio;
 	int disp_en_gpio;
 	int bklt_en_gpio;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/30, add for panel 1.8v power
+	int lcd_1v8_en_gpio;
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/30, add for -5v
+	int disp_enn_gpio;
+#endif
 	bool bklt_en_gpio_invert;
 	bool bklt_en_gpio_state;
 	int avdd_en_gpio;
@@ -497,6 +525,13 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds lp_on_cmds;
 	struct dsi_panel_cmds lp_off_cmds;
 	struct dsi_panel_cmds status_cmds;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/31, add for LBR and HBM
+	struct dsi_panel_cmds lbr_cmds;
+	struct dsi_panel_cmds hbm_cmds;
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/31, solve AOD flicker issue
+	struct dsi_panel_cmds aod_backlight_cmds;
+#endif
 	u32 *status_valid_params;
 	u32 *status_cmds_rlen;
 	u32 *status_value;
@@ -516,12 +551,20 @@ struct mdss_dsi_ctrl_pdata {
 	struct completion video_comp;
 	struct completion dynamic_comp;
 	struct completion bta_comp;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/08/22, solve mdp dump error in monkey test.
+	struct completion db_mode_wait;
+#endif
 	spinlock_t irq_lock;
 	spinlock_t mdp_lock;
 	int mdp_busy;
 	struct mutex mutex;
 	struct mutex cmd_mutex;
 	struct mutex cmdlist_mutex;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/08/22, solve mdp dump error in monkey test.
+	spinlock_t db_mode_mutex;
+#endif
 	struct regulator *lab; /* vreg handle */
 	struct regulator *ibb; /* vreg handle */
 	struct mutex clk_lane_mutex;
@@ -588,6 +631,10 @@ struct mdss_dsi_ctrl_pdata {
 	bool update_phy_timing; /* flag to recalculate PHY timings */
 
 	bool phy_power_off;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.Feature, 2018/10/31, add for dynamic mipi dsi clk
+	atomic_t clkrate_change_pending;
+#endif
 };
 
 struct dsi_status_data {
@@ -662,6 +709,10 @@ int mdss_dsi_pre_clkon_cb(void *priv,
 			  enum mdss_dsi_lclk_type l_type,
 			  enum mdss_dsi_clk_state new_state);
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable);
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+// Guoqiang.Jiang@PSW.MM.Display.LCD.Machine, 2018/09/12, add for lcd rst before lp11
+int oppo_reset_before_lp11(struct mdss_panel_data *pdata);
+#endif
 void mdss_dsi_phy_disable(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_cmd_test_pattern(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_video_test_pattern(struct mdss_dsi_ctrl_pdata *ctrl);
