@@ -1,0 +1,7 @@
+DEFS = -DCONFIG_OPPO_FINGERPRINT_PROJECT=18321
+ccflags-y += $(DEFS)
+DEFS_PLATFORM = -DCONFIG_OPPO_FINGERPRINT_PLATFORM=660
+ccflags-y += $(DEFS_PLATFORM)
+
+obj-y     +=  oppo_fp_common.o
+
