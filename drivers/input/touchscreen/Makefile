@@ -114,3 +114,6 @@ obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX) += synaptics_dsx/
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_TCM)	+= synaptics_tcm/
 obj-$(CONFIG_TOUCHSCREEN_FTS)	+= focaltech_touch/
 obj-$(CONFIG_TOUCHSCREEN_NT36XXX)	+= nt36xxx/
+#Wanghao@Bsp.group.Tp,2017-09-20,Added for common touchpanel driver 
+obj-$(CONFIG_TOUCHPANEL_OPPO)		+= oppo_touchscreen/
+obj-$(CONFIG_TOUCHPANEL_OPPO)		+= touch.o
