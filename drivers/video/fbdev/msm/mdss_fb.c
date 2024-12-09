@@ -49,6 +49,33 @@
 
 #include "mdss_livedisplay.h"
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/*
+* Guoqiang.jiang@MultiMedia.Display.LCD.Stability, 2018/10/12,
+* add for get panel serial number
+*/
+#include <soc/oppo/oppo_project.h>
+#include <soc/oppo/boot_mode.h>
+#include <soc/oppo/mmkey_log.h>
+#include "mdss_dsi.h"
+#include <linux/completion.h>
+static int boot_mode = 0;
+/*
+* Guoqiang.Jiang@MultiMedia.Display.LCD.Stability, 2017/10/16,
+* add for panel status
+*/
+int lcd_closebl_flag = 0;
+
+/*
+* Guoqiang.Jiang@MultiMedia.Display.LCD.Stability, 2017/05/02,
+* add for get panel serial number
+*/
+static uint64_t serial_number = 0x0;
+static bool read_panel_serial_number = true;
+
+#define PANEL_SERIAL_NUM_REG	0xA1
+#endif
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -74,6 +101,19 @@
  * Default value is set to 1 sec.
  */
 #define MDP_TIME_PERIOD_CALC_FPS_US	1000000
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/*Guoqiang.Jiang@PSW.MM.Display.LCD.Stability,2018/1/31,add for support aod feature, solve bug:1264744*/
+bool request_enter_aod = false;
+bool is_just_exit_aod = false;
+DEFINE_MUTEX(aod_lock);
+
+#ifdef IS_PROJECT_18321
+int system_backlight_target = 944;
+#else   /*IS_PROJECT_18321*/
+int system_backlight_target = 235;
+#endif /*IS_PROJECT_18321*/
+#endif
 
 static struct fb_info *fbi_list[MAX_FBI_LIST];
 static int fbi_list_index;
@@ -944,6 +984,595 @@ static ssize_t idle_power_collapse_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "idle power collapsed\n");
 }
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+// Guoqiang.Jiang@PSW.MM.Driver.feature, 2017/10/10, add for HBM
+int hbm_delay = 34000;
+extern int hbm_mode;
+extern void set_hbm_level(struct mdss_panel_data *pdata, int hbm_level,
+			  bool hbm_to_aod);
+static ssize_t hbm_store(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	int level = 0;
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
+
+	if (is_lcd(OPPO17011_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17021_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17081_SAMSUNG_AMS596W401_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO16118_SAMSUNG_S6E3FA5_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO16051_SAMSUNG_S6E3FA5_1080P_CMD_PANEL)) {
+		sscanf(buf, "%du", &level);
+		if (!mdss_fb_is_power_off(mfd)) {
+			pdata->sysfs_hbm_mode = level;
+			set_hbm_level(pdata, level, false);
+		}
+	}
+
+	return count;
+}
+
+static ssize_t hbm_show(struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
+
+	if (is_lcd(OPPO17011_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17021_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17081_SAMSUNG_AMS596W401_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO16118_SAMSUNG_S6E3FA5_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO16051_SAMSUNG_S6E3FA5_1080P_CMD_PANEL)) {
+		printk(KERN_INFO "%s: HBM level:%d getted!\n", __func__, pdata->sysfs_hbm_mode);
+		return sprintf(buf, "%d\n", pdata->sysfs_hbm_mode);
+	} else {
+		printk(KERN_INFO "%s: Panel unsupport hbm feature!\n", __func__);
+		return 0;
+	}
+}
+
+// Guoqiang.Jiang@PSW.MM.Driver.feature, 2017/03/17, add for dynamic fps switch
+bool oppo_dynamic_fps_disable_switch = false;
+extern ssize_t oppo_dynamic_fps_contrl(struct mdss_panel_data *pdata,
+				       struct fb_info *fbi);
+static ssize_t dynamic_fps_switch_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
+	uint8_t dynamic_fps_switch = 0x0;
+
+	if (is_lcd(OPPO18136_HIMAX_HX83112A_1080_2340_VOD_PANEL) ||
+	    is_lcd(OPPO18321_DPT_NT36672A_1080_2340_VOD_PANEL)) {
+		if (kstrtou8(buf, 0, &dynamic_fps_switch)) {
+			pr_err("kstrtouint buf error!\n");
+			return count;
+		}
+
+		if (dynamic_fps_switch == 0x1) {
+			oppo_dynamic_fps_disable_switch = false;
+		} else {
+			oppo_dynamic_fps_disable_switch = true;
+			oppo_dynamic_fps_contrl(pdata, fbi);
+		}
+
+		pr_info("%s set dynamic_fps to %x", __func__, dynamic_fps_switch);
+	}
+
+	return count;
+}
+
+static ssize_t dynamic_fps_switch_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
+	int ret;
+
+	if (oppo_dynamic_fps_disable_switch)
+		ret = 0;
+	else
+		ret = 1;
+
+	pr_info("%s Current dynamic_fps is %d", __func__, pdata->panel_info.mipi.frame_rate);
+
+	return sprintf(buf, "%d\n", ret);
+}
+
+// Guoqiang.Jiang@PSW.MM.Driver.feature, 2017/03/17, add for LBR
+extern int set_lbr_mode(int lbr_level);
+extern int get_lbr_mode(void);
+static ssize_t lbr_show(struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	if (!(is_project(OPPO_16051) || is_project(OPPO_16118)))
+		return 0;
+
+	printk(KERN_INFO "get lbr level = %d\n",get_lbr_mode());
+
+	return sprintf(buf, "%d\n", get_lbr_mode());
+}
+
+static ssize_t lbr_store(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+#if 0
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.feature, 2018/09/27, add for remove LBR function.
+	int lbr_level = 0;
+#endif
+
+	if (!(is_project(OPPO_16051) || is_project(OPPO_16118)))
+		return count;
+
+#if 0
+	// Guoqiang.Jiang@PSW.MM.Display.LCD.feature, 2018/09/27, add for remove LBR function.
+	sscanf(buf, "%du", &lbr_level);
+	printk(KERN_INFO "%s LBR level = %d\n", __func__, lbr_level);
+	set_lbr_mode(lbr_level);
+#endif
+
+	return count;
+}
+
+// Ling.Guo@Swdp.MultiMedia.Display, 2017/04/28,modify for high brightness mode
+extern int set_outdoor_brightness(unsigned int brightness,unsigned long outdoor_mode);
+extern unsigned int current_brightness;
+unsigned long outdoor_mode = 0;
+static ssize_t outdoorbl_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	printk("%s outdoor_mode=%ld\n", __func__, outdoor_mode);
+	return sprintf(buf, "%ld\n", outdoor_mode);
+}
+
+static ssize_t outdoorbl_store(struct device *dev, struct device_attribute *attr,
+			       const char *buf, size_t num)
+{
+	int ret;
+	unsigned long mode;
+
+	ret = kstrtoul(buf, 10, &mode);
+	if (mode != outdoor_mode && mode < 3) {
+		outdoor_mode = mode;
+		printk("%s current_brightness = %d outdoor_mode=%ld\n", __func__,current_brightness,outdoor_mode);
+		set_outdoor_brightness(current_brightness,outdoor_mode);
+	}
+
+	return num;
+}
+
+// Shengjun.Gou@PSW.MM.Display.LCD.Stability, 2017/01/24, add for lcd esd test
+extern void set_esd_mode(void);
+static ssize_t esd_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	set_esd_mode();
+	return 0;
+}
+
+// Gou Shengjun@MultiMedia.Display.LCD.Stability, 2017/01/20, add for adb mipi read/write lcd reg
+extern void send_user_write_reg(char *par, u32 cnt);
+static ssize_t lcd_reg_store(struct device *dev,
+			     struct device_attribute *attr,
+			     const char *user_buf, size_t count)
+{
+	char buf[200];
+	char par[30];
+	char *p = NULL, *p1;
+	u32 cnt = 0, i = 0;
+
+	strcpy(buf, user_buf);
+	while (buf[i] == ' ')
+		i++;
+	p = &buf[i];
+	do {
+		p1 = strsep(&p, " ");
+		// shygosh: sscanf() in if statement?
+		if (sscanf(p1, "%x", (unsigned int*)&par[cnt]))
+			cnt++;
+	} while (p != NULL);
+	for (i = 0; i < cnt; i++)
+		pr_err("%x ", par[i]);
+	send_user_write_reg(par, cnt);
+
+	return count;
+}
+
+// shygosh: create dummy lcd_reg_show()
+static ssize_t lcd_reg_show(struct device *dev,
+			    struct device_attribute *attr, char *buf)
+{
+	return 0;
+}
+
+extern void dump_lcd_reg(size_t off,u32 data,char* dump_data);
+static u32 lcd_reg_off,lcd_reg_num;
+static bool dump_reg_update = false;
+static ssize_t dump_reg_store(struct device *dev,
+			      struct device_attribute *attr,
+			      const char *user_buf, size_t count)
+{
+	char buf[50];
+	u32 cnt;
+
+	strcpy(buf,user_buf);
+	cnt = sscanf(buf, "%x %x", &lcd_reg_off, &lcd_reg_num);
+	pr_err("addr=%x data=%x\n", lcd_reg_off, lcd_reg_num);
+	dump_reg_update = true;
+
+	return count;
+}
+
+#define REG_CNT_R 16 // Read reg counts
+
+static ssize_t dump_reg_show(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+{
+	int ret = 0;
+	char dump_data[REG_CNT_R * 5 + 1];
+
+	if (!dump_reg_update)
+		return ret;
+
+	dump_lcd_reg(lcd_reg_off,lcd_reg_num,dump_data);
+	ret = scnprintf(buf, PAGE_SIZE, "%s\n", dump_data);
+	dump_reg_update = false;
+
+	return ret;
+}
+
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/13, add for lcd off event for ftm
+static ssize_t lcdoff_show(struct device *dev, struct device_attribute *attr,
+			   char *buf)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+
+	pr_err("%s mfd=0x%p\n", __func__, mfd);
+	if (!mfd)
+		return -ENODEV;
+
+	// return sprintf(buf,"mdss_fb_suspend_sub is called\n");
+
+	// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/13, add for lcd to dump for ftm
+	return mdss_fb_send_panel_event(mfd, MDSS_EVENT_DISABLE_PANEL, NULL);
+}
+
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/14, add for lcd cabc
+extern int set_cabc(int level);
+extern int cabc_mode;
+static ssize_t cabc_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	if (!(is_lcd(OPPO16103_JDI_R63452_1080P_CMD_PANEL) ||
+	      is_lcd(OPPO18136_HIMAX_HX83112A_1080_2340_VOD_PANEL) ||
+	      is_lcd(OPPO18321_DPT_NT36672A_1080_2340_VOD_PANEL)))
+		return 0;
+
+	printk(KERN_INFO "get cabc mode = %d\n",cabc_mode);
+
+	return sprintf(buf, "%d\n", cabc_mode);
+}
+
+static ssize_t cabc_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	int level = 0;
+
+	if (!(is_lcd(OPPO16103_JDI_R63452_1080P_CMD_PANEL) ||
+	      is_lcd(OPPO18136_HIMAX_HX83112A_1080_2340_VOD_PANEL) ||
+	      is_lcd(OPPO18321_DPT_NT36672A_1080_2340_VOD_PANEL)))
+		return count;
+
+	sscanf(buf, "%du", &level);
+	set_cabc(level);
+	return count;
+}
+
+static ssize_t closebl_show(struct device *dev,
+			    struct device_attribute *attr, char *buf)
+{
+	printk(KERN_INFO "get closebl flag = %d\n",lcd_closebl_flag);
+
+	return sprintf(buf, "%d\n", lcd_closebl_flag);
+}
+
+static ssize_t closebl_store(struct device *dev,
+			     struct device_attribute *attr,
+			     const char *buf, size_t count)
+{
+	int closebl = 0;
+
+	sscanf(buf, "%du", &closebl);
+	pr_err("lcd_closebl_flag = %d\n",closebl);
+	if (closebl != 1)
+		lcd_closebl_flag = 0;
+	pr_err("mdss_set_closebl_flag = %d\n",lcd_closebl_flag);
+
+	return count;
+}
+
+// Gou shegnjun@PSW.MM.Display.LCD.Stability, 2018/01/22, add for lcm id read
+static uint8_t lcm_id_addr = 0x0;
+extern void lcm_id_read(char reg_addr, char* buf, int lenth);
+static ssize_t lcm_id_info_store(struct device *dev, struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	if (kstrtou8(buf, 0, &lcm_id_addr)) {
+		pr_err("%s kstrtouu8 buf error!\n", __func__);
+		return count;
+	}
+
+	pr_info("%s set lcm id address:0x%2x.\n", __func__, lcm_id_addr);
+
+	return count;
+}
+
+static ssize_t lcm_id_info_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = fbi->par;
+	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
+	int lcm_id_read_len = 2, ret = 0;
+	uint8_t lcm_id_info[16] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+				   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+
+	if (!pdata) {
+		pr_err("no panel connected!\n");
+		return -1;
+	}
+
+	if (mdss_panel_is_power_off(mfd->panel_power_state)) {
+		pr_err("panel is off, read panel reg forbidden!\n");
+		return -1;
+	}
+
+	if (0x0 != lcm_id_addr) {
+		lcm_id_read(lcm_id_addr, lcm_id_info, lcm_id_read_len);
+		ret = scnprintf(buf, PAGE_SIZE, "LCM ID[%x]: 0x%x 0x%x\n", lcm_id_addr, lcm_id_info[0], lcm_id_info[1]);
+		lcm_id_addr = 0x0;
+	} else {
+		ret = scnprintf(buf, PAGE_SIZE, "LCM ID[00]: 0x00 0x00\n");
+	}
+
+	return ret;
+}
+
+extern int panel_serial_number_read(char addr, uint64_t *buf);
+static ssize_t panel_serial_number_show(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	int ret = 0;
+
+	if (is_lcd(OPPO17011_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17021_SAMSUNG_SOFEG01_S_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO17081_SAMSUNG_AMS596W401_1080P_CMD_PANEL) ||
+	    is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL)) {
+		ret = panel_serial_number_read(PANEL_SERIAL_NUM_REG, &serial_number);
+		if (ret < 0)
+			ret = scnprintf(buf, PAGE_SIZE, "Get panel serial number failed, reason:%d",ret);
+		else
+			ret = scnprintf(buf, PAGE_SIZE, "Get panel serial number: %llx\n",serial_number);
+	} else {
+		ret = scnprintf(buf, PAGE_SIZE, "Unsupported panel!!\n");
+	}
+
+	return ret;
+}
+
+// Guoqiang.Jiang@PSW.MM.Driver.feature, 2018/07/27, add for fingerprint notify frigger
+extern bool flag_lcd_off;
+bool oppo_fp_notify_delay = false;
+bool fingerprint_icon_shows = false;
+static void fingerprint_send_notify(struct fb_info *fbi, uint8_t fingerprint_op_mode, int path)
+{
+#define MSM_DRM_ONSCREENFINGERPRINT_EVENT 0x20
+	struct fb_event event;
+
+	if (path != 0)
+		mdelay(67);
+
+	event.info = fbi;
+	event.data = &fingerprint_op_mode;
+	fb_notifier_call_chain(MSM_DRM_ONSCREENFINGERPRINT_EVENT, &event);
+	pr_info("%s operation mode: 0x%x, path :%d.\n", __func__, fingerprint_op_mode, path);
+}
+
+static ssize_t fingerprint_notify_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	uint8_t fingerprint_op_mode = 0x0;
+	struct fb_info *fbi = dev_get_drvdata(dev);
+
+	/* will ignoring event during panel off situation. */
+	if (flag_lcd_off) {
+		pr_err("%s panel in off state, ignoring event.\n", __func__);
+		return count;
+	}
+
+	if (kstrtou8(buf, 0, &fingerprint_op_mode)) {
+		pr_err("%s kstrtouu8 buf error!\n", __func__);
+		return count;
+	}
+
+	if (fingerprint_op_mode == 0x1 && oppo_fp_notify_delay == true)
+		return count;
+
+	/* need send notify after hbm if ui ready too early. */
+	if (!fingerprint_icon_shows) {
+		oppo_fp_notify_delay = true;
+		pr_warn("%s ui ready too early!\n", __func__);
+		return count;
+	} else {
+		mdelay(67);
+	}
+
+	fingerprint_send_notify(fbi, fingerprint_op_mode, 0);
+
+	return count;
+}
+
+// shygosh: create dummy fingerprint_notify_show()
+static ssize_t fingerprint_notify_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	return 0;
+}
+
+// Deliang.Peng@PSW.MultiMedia.Display.Service.Log, 2017/3/31, add for dump sf backtrace
+#define MDSS_DEBUG_SWT_TAG "SFWatchDog:"
+#define MDSS_DEBUG_DUMP_LW    0x1
+#define MDSS_DEBUG_DUMP_ALL   0x2
+#define MDSS_DEBUG_MASK       0x3
+
+#define SFWTD_SF_PROCESS_NAME "surfaceflinger"
+
+#ifdef arch_trigger_all_cpu_backtrace
+static inline bool trigger_all_cpu_backtrace(void)
+{
+#if defined(CONFIG_ARM64)
+	arch_trigger_all_cpu_backtrace();
+#else
+	arch_trigger_all_cpu_backtrace(true);
+#endif
+
+	return true;
+}
+#else
+static inline bool trigger_all_cpu_backtrace(void)
+{
+	return false;
+}
+#endif
+
+static void mdss_debug_process_state(struct task_struct *t)
+{
+	/*
+	 * Ensure the task is not frozen.
+	 * Also, skip vfork and any other user process that freezer should skip.
+	 */
+	printk(KERN_ERR "%s %s: pid=%d,state=0x%lx,flags=0x%x process start\n",
+		MDSS_DEBUG_SWT_TAG,t->comm, t->pid, t->state,t->flags);
+
+	sched_show_task(t);
+	debug_show_held_locks(t);
+
+	if ((t->state == TASK_UNINTERRUPTIBLE) ||
+	    (t->state == TASK_STOPPED) ||
+	    (t->state == TASK_TRACED)) {
+		wake_up_process(t);
+		printk(KERN_ERR "%s wake up %s:\n",MDSS_DEBUG_SWT_TAG,t->comm);
+	}
+
+	printk(KERN_ERR "%s process end\n",MDSS_DEBUG_SWT_TAG);
+}
+
+static void mdss_debug_processes_state(int flag)
+{
+	int max_count = PID_MAX_LIMIT;
+	int p_thread_count = 0x0;
+	struct task_struct *p, *t;
+
+	printk(KERN_ERR "%s taskes \n",MDSS_DEBUG_SWT_TAG);
+
+	for_each_process(p) {
+		if (!max_count--)
+			break;
+
+		// Deliang.Peng@PSW.MultiMedia.Display.Service.Log, 2017/5/03,
+		// Modify for print log result to cpu watchdog dump.
+		if (!strncmp(p->comm,SFWTD_SF_PROCESS_NAME, TASK_COMM_LEN) ||
+		    (flag & MDSS_DEBUG_DUMP_ALL)) {
+			printk(KERN_ERR "%s %s: pid=%d process:\n", MDSS_DEBUG_SWT_TAG,p->comm, p->pid);
+			mdss_debug_process_state(p);
+			if (flag & MDSS_DEBUG_DUMP_ALL) {
+				printk(KERN_ERR "%s %s: pid=%d held_locks:\n",
+					MDSS_DEBUG_SWT_TAG,p->comm, p->pid);
+				debug_show_held_locks(p);
+			}
+			for_each_thread(p, t) {
+				printk(KERN_ERR "%s %s: pid=%d thread: count=%d\n",
+					MDSS_DEBUG_SWT_TAG,t->comm, t->pid,p_thread_count++);
+				mdss_debug_process_state(t);
+				if (flag & MDSS_DEBUG_DUMP_ALL) {
+					printk(KERN_ERR "%s %s: pid=%d thread held_locks:\n",
+						MDSS_DEBUG_SWT_TAG,p->comm, p->pid);
+					debug_show_held_locks(t);
+				}
+			}
+		}
+	}
+
+	// Deliang.Peng@PSW.MultiMedia.Display.Service.Log, 2017/5/03,
+	// Delete for print log result to cpu watchdog dump.
+	// trigger_all_cpu_backtrace();
+}
+
+static void mdss_debug_process(int flag)
+{
+	printk(KERN_ERR "%s debug (%d) start \n",MDSS_DEBUG_SWT_TAG,flag);
+	rcu_read_lock();
+	mdss_debug_processes_state(flag);
+	rcu_read_unlock();
+	printk(KERN_ERR "%s debug end \n",MDSS_DEBUG_SWT_TAG);
+}
+
+// shygosh: create static debug variable
+static int oppo_mdss_debug = 0;
+static ssize_t debug_store(struct device *dev, struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	sscanf(buf, "%d", &oppo_mdss_debug);
+	if (oppo_mdss_debug & MDSS_DEBUG_MASK)
+		mdss_debug_process(oppo_mdss_debug);
+
+	return count;
+}
+
+// shygosh: create debug_show()
+static ssize_t debug_show(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	return sprintf(buf, "%d\n", (oppo_mdss_debug & MDSS_DEBUG_MASK));
+}
+
+// LiPing@MultiMedia.Display.LCD.Stability, 2017/02/18, add for lcd seed
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/03/06, add for 16118 samsung lcd seed
+extern int set_seed_mode(int level);
+extern int seed_mode;
+static ssize_t seed_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	if (!((is_lcd(OPPO16051_SAMSUNG_S6E3FA5_1080P_CMD_PANEL) && is_project(OPPO_16051)) ||
+	      (is_lcd(OPPO16118_SAMSUNG_S6E3FA5_1080P_CMD_PANEL) && is_project(OPPO_16118))))
+		return 0;
+
+	printk(KERN_INFO "get seed mode = %d\n",seed_mode);
+
+	return sprintf(buf, "%d\n", seed_mode);
+}
+
+static ssize_t seed_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	int level = 0;
+
+	sscanf(buf, "%du", &level);
+	set_seed_mode(level);
+
+	return count;
+}
+#endif
+
 static DEVICE_ATTR_RO(msm_fb_type);
 static DEVICE_ATTR_RW(msm_fb_split);
 static DEVICE_ATTR_RO(show_blank_event);
@@ -958,6 +1587,35 @@ static DEVICE_ATTR_RW(msm_fb_dfps_mode);
 static DEVICE_ATTR_RO(measured_fps);
 static DEVICE_ATTR_RW(msm_fb_persist_mode);
 static DEVICE_ATTR_RO(idle_power_collapse);
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+static DEVICE_ATTR_RW(dump_reg);
+static DEVICE_ATTR_RW(lcd_reg);
+static DEVICE_ATTR_RO(esd);
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/13, add for lcd off event for ftm
+static DEVICE_ATTR_RO(lcdoff);
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/14, add for lcd cabc
+static DEVICE_ATTR_RW(cabc);
+static DEVICE_ATTR_RW(closebl);
+// Gou shengjun@PSW.MM.Display.LCD.Stability, 2017/02/15, add for 16051 read LCM window info
+static DEVICE_ATTR_RW(lcm_id_info);
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for HBM
+static DEVICE_ATTR_RW(hbm);
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for LBR
+static DEVICE_ATTR_RW(lbr);
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for panel serial number
+static DEVICE_ATTR_RO(panel_serial_number);
+// Gou Shengjun@MultiMedia.Display.LCD.Stability, 2017/02/18, add for lcd seed
+static DEVICE_ATTR_RW(seed);
+// Ling.Guo@Swdp.MultiMedia.Display, 2017/04/28, modify for high brightness mode
+static DEVICE_ATTR_RW(outdoorbl);
+// Gou shengjun@PSW.MM.Driver.feature, 2018/07/27, add for fingerprint notify frigger
+static DEVICE_ATTR_RW(fingerprint_notify);
+// Gou shengjun@PSW.MM.Driver.feature, 2018/07/27, add for dynamic fps switch
+static DEVICE_ATTR_RW(dynamic_fps_switch);
+// Deliang.Peng@MultiMedia.Display.Service.Log, 2017/3/31, add for dump sf backtrace
+static DEVICE_ATTR_RW(debug);
+#endif
 
 static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_type.attr,
@@ -974,6 +1632,35 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_measured_fps.attr,
 	&dev_attr_msm_fb_persist_mode.attr,
 	&dev_attr_idle_power_collapse.attr,
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/01/20, add for adb mipi read/write lcd reg
+	&dev_attr_dump_reg.attr,
+	&dev_attr_lcd_reg.attr,
+	&dev_attr_esd.attr,
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/13, add for lcd off event for ftm
+	&dev_attr_lcdoff.attr,
+// YongPeng.Yi@MultiMedia.Display.LCD.Stability, 2017/02/14, add for lcd cabc
+	&dev_attr_cabc.attr,
+	&dev_attr_closebl.attr,
+// Shengjun.Gou@PSW.MM.Display.LCD.Stability, 2017/02/15, add for read LCM window info
+	&dev_attr_lcm_id_info.attr,
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for HBM
+	&dev_attr_hbm.attr,
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for LBR
+	&dev_attr_lbr.attr,
+// Shengjun.Gou@PSW.MM.Driver.feature, 2017/03/17, add for panel serial number
+	&dev_attr_panel_serial_number.attr,
+// Gou shengjun@PSW.MM.Driver.feature, 2018/07/27, add for fingerprint triger
+	&dev_attr_fingerprint_notify.attr,
+// Gou shengjun@PSW.MM.Driver.feature, 2018/07/27, add for dynamic fps switch
+	&dev_attr_dynamic_fps_switch.attr,
+// LiPing@MultiMedia.Display.LCD.Stability, 2017/02/18, add for lcd seed
+	&dev_attr_seed.attr,
+// Ling.Guo@Swdp.MultiMedia.Display, 2017/04/28 modify for high brightness mode
+	&dev_attr_outdoorbl.attr,
+// Deliang.Peng@MultiMedia.Display.Service.Log, 2017/3/31, add for dump sf backtrace
+	&dev_attr_debug.attr,
+#endif
 	NULL,
 };
 
@@ -1310,11 +1997,27 @@ static int mdss_fb_probe(struct platform_device *pdev)
 	}
 
 	mfd->ext_ad_ctrl = -1;
+#ifndef CONFIG_OPPO_VENDOR_EDIT
+//Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/31,
+//modify for lcd happen esd set backlight 127 before set system backlight
 	if (mfd->panel_info && mfd->panel_info->brightness_max > 0)
 		MDSS_BRIGHT_TO_BL(mfd->bl_level, backlight_led.brightness,
 		mfd->panel_info->bl_max, mfd->panel_info->brightness_max);
 	else
 		mfd->bl_level = 0;
+#else
+	if (mfd->panel_info && mfd->panel_info->brightness_max > 0){
+		MDSS_BRIGHT_TO_BL(mfd->bl_level, backlight_led.brightness,
+		mfd->panel_info->bl_max, mfd->panel_info->brightness_max);
+		if(mfd->panel_info->bl_max > 1023){
+			mfd->bl_level = 1600;   /*for 2048 level backlight set same to lk 1600*/
+		}else{
+			mfd->bl_level = 200;	/*for 200 level backlight set same to lk 200*/
+		}
+	}
+	else
+		mfd->bl_level = 0;
+#endif
 
 	mfd->bl_scale = 1024;
 	mfd->ad_bl_level = 0;
@@ -1430,6 +2133,16 @@ static int mdss_fb_probe(struct platform_device *pdev)
 			pr_err("failed to register input handler\n");
 
 	INIT_DELAYED_WORK(&mfd->idle_notify_work, __mdss_fb_idle_notify_work);
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+//Shengjun.Gou@PSW.MM.Display.LCD.Stability, 2017/02/14,
+//add for silence and sau mode close bl flag
+	if (MSM_BOOT_MODE__SILENCE == get_boot_mode() ||
+	    MSM_BOOT_MODE__SAU == get_boot_mode()) {
+		pr_debug("lcd_closebl_flag = 1\n");
+		lcd_closebl_flag = 1;
+	}
+#endif
 
 	return rc;
 }
@@ -1753,6 +2466,9 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	bool ad_bl_notify_needed = false;
 	bool bl_notify_needed = false;
 
+#ifndef CONFIG_OPPO_VENDOR_EDIT
+//Shengjun.Gou@PSW.MM.Display.LCD.Stability, 2017/02/14,
+//modify for Lcd ftm mode backlight
 	if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
 		|| !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd)) ||
 		mfd->panel_info->cont_splash_enabled) {
@@ -1763,6 +2479,23 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	} else {
 		mfd->unset_bl_level = U32_MAX;
 	}
+#else
+	boot_mode =get_boot_mode();
+	if(boot_mode == MSM_BOOT_MODE__FACTORY){
+			mfd->unset_bl_level = 0;
+	}else{
+		if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
+			|| !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd)) ||
+			mfd->panel_info->cont_splash_enabled) {
+			mfd->unset_bl_level = bkl_lvl;
+			return;
+		} else if (mdss_fb_is_power_on(mfd) && mfd->panel_info->panel_dead) {
+			mfd->unset_bl_level = mfd->bl_level;
+		} else {
+			mfd->unset_bl_level = U32_MAX;
+		}
+	}
+#endif
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
@@ -1797,6 +2530,17 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 			mdss_fb_bl_update_notify(mfd,
 				NOTIFY_TYPE_BL_UPDATE);
 	}
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	/*
+	 * Guoqiang.Jiang@PSW.MM.Display.LCD.Stability, 2018/10/12,
+	 * read panel serial number at begining
+	 */
+	if (read_panel_serial_number) {
+		panel_serial_number_read(PANEL_SERIAL_NUM_REG, &serial_number);
+		read_panel_serial_number = false;
+	}
+#endif
 }
 
 void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
@@ -2004,7 +2748,7 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 	}
 
 	/* Reset the backlight only if the panel was off */
-	if (mdss_panel_is_power_off(cur_power_state)) {
+	if (mdss_panel_is_power_off(cur_power_state) || mdss_panel_is_power_on_lp (cur_power_state) ) {
 		mutex_lock(&mfd->bl_lock);
 		if (!mfd->allow_bl_update) {
 			mfd->allow_bl_update = true;
@@ -2033,6 +2777,14 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 error:
 	return ret;
 }
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* Gou shengjun@PSW.MM.Display.LCD.Stability, 2018/08/19,
+* add for AOD status sync.
+*/
+bool fb_blank_sync_flag = false;
+bool oppo_aod_backlight_need_set = false;
+#endif
 
 static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			     int op_enable)
@@ -2079,6 +2831,14 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
 		pr_debug("unblank called. cur pwr state=%d\n", cur_power_state);
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/*jie.hu@PSW.MM.Display.LCD.Stability,2018/1/31,add for support aod feature, solve bug:1264744*/
+		mutex_lock(&aod_lock);
+		request_enter_aod = false;
+		fb_blank_sync_flag = true;
+		oppo_aod_backlight_need_set = false;
+		mutex_unlock(&aod_lock);
+#endif
 		ret = mdss_fb_blank_unblank(mfd);
 		break;
 	case BLANK_FLAG_ULP:
@@ -2088,13 +2848,27 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			pr_debug("Unsupp transition: off --> ulp\n");
 			return 0;
 		}
-
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+		/*
+		 * Gou shengjun@PSW.MM.Display.LCD.Stability,2018/1/31
+		 * add for send a fack panel off enent to tp and charge
+		 */
+		if (fb_blank_sync_flag && is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL)) {
+			int blank_mode = FB_BLANK_POWERDOWN;
+			struct fb_event event;
+			fb_blank_sync_flag = false;
+			event.info  = info;
+			event.data = &blank_mode;
+			fb_notifier_call_chain(FB_EVENT_BLANK, &event);
+		}
+#endif
 		ret = mdss_fb_blank_blank(mfd, req_power_state);
 		break;
 	case BLANK_FLAG_LP:
 		req_power_state = MDSS_PANEL_POWER_LP1;
 		pr_debug(" power mode requested\n");
 
+#ifndef CONFIG_OPPO_VENDOR_EDIT
 		/*
 		 * If low power mode is requested when panel is already off,
 		 * then first unblank the panel before entering low power mode
@@ -2105,8 +2879,39 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			if (ret)
 				break;
 		}
+#else
+		if ((mdss_fb_is_power_off(mfd) && mfd->mdp.on_fnc) ||
+		    (fb_blank_sync_flag && is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL))) {
+			/*jie.hu@PSW.MM.Display.LCD.Stability,2018/1/31,add for support aod feature, solve bug:1264744*/
+			mutex_lock(&aod_lock);
+			request_enter_aod = true;
+			oppo_aod_backlight_need_set = true;
+			mutex_unlock(&aod_lock);
+			/*
+			 * Gou shengjun@PSW.MM.Display.LCD.Stability,2018/1/31
+			 * add for send a fack panel off enent to tp and charge
+			 */
+			if (fb_blank_sync_flag && is_lcd(OPPO18005_SAMSUNG_AMS641RW01_1080P_CMD_PANEL)) {
+				int blank_mode = FB_BLANK_POWERDOWN;
+				struct fb_event event;
+				fb_blank_sync_flag = false;
+				event.info  = info;
+				event.data = &blank_mode;
+				fb_notifier_call_chain(FB_EVENT_BLANK, &event);
+			} else {
+				pr_debug("off --> lp. switch to on first\n");
+				ret = mdss_fb_blank_unblank(mfd);
+				if (ret)
+					break;
+			}
+		}
+#endif
 
 		ret = mdss_fb_blank_blank(mfd, req_power_state);
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+		// Gou shengjun@PSW.MM.Display.LCD.Stability,2018/1/31 add for send a fack panel off enent to tp and charge
+		fb_blank_sync_flag = false;
+#endif
 		break;
 	case FB_BLANK_HSYNC_SUSPEND:
 	case FB_BLANK_POWERDOWN:
@@ -2114,6 +2919,7 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 		req_power_state = MDSS_PANEL_POWER_OFF;
 		pr_debug("blank powerdown called\n");
 		ret = mdss_fb_blank_blank(mfd, req_power_state);
+		fb_blank_sync_flag = false;
 		break;
 	}
 
@@ -2613,6 +3419,10 @@ static int mdss_fb_register(struct msm_fb_data_type *mfd)
 	var->sync = 0,	/* see FB_SYNC_* */
 	var->rotate = 0,	/* angle we rotate counter clockwise */
 	mfd->op_enable = false;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Gou shengjun@PSW.MM.Driver.feature, 2018/08/17, add for fingerprint hbm
+	mfd->oppo_commit_info = false;
+#endif
 
 	switch (mfd->fb_imgType) {
 	case MDP_RGB_565:
@@ -3126,6 +3936,33 @@ static void mdss_fb_release_kickoff(struct msm_fb_data_type *mfd)
 	}
 }
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* Gou shengjun@PSW.MM.Driver.feature, 2018/08/17,
+ *add for fingerprint hbm
+*/
+#define OPPO_FINGERPRINT_PRESSED_LAYER 0x0001
+extern  int request_enter_form_hbm_to_aod(struct mdss_panel_data *pdata, int hbm_level);
+extern  void oppo_wait_for_frame_start(struct mdss_mdp_ctl *ctl);
+static  DEFINE_MUTEX(layer_hbm_sync_mutex);
+/*
+ * oppo special layer intercept
+ */
+static int oppo_layer_interceptor(struct msm_fb_data_type *mfd, uint32_t layer_musk)
+{
+	ATRACE_BEGIN(__func__);
+	/* oppo special layer interceptor*/
+	if (layer_musk & OPPO_FINGERPRINT_PRESSED_LAYER)
+	{
+		mfd->oppo_commit_info = true;
+	} else if (!(layer_musk & OPPO_FINGERPRINT_PRESSED_LAYER)) {
+		/* close HBM when fingerprint touch layer disapper */
+		mfd->oppo_commit_info = false;
+	}
+	ATRACE_END(__func__);
+	return 0;
+}
+#endif
+
 /**
  * __mdss_fb_sync_buf_done_callback() - process async display events
  * @p:		Notifier block registered for async events.
@@ -3528,6 +4365,14 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 	atomic_inc(&mfd->kickoff_pending);
 	wake_up_all(&mfd->commit_wait_q);
 	mutex_unlock(&mfd->mdp_sync_pt_data.sync_mutex);
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Gou shengjun@PSW.MM.Driver.feature, 2018/08/17, add for fingerprint hbm send notify to fp if ui ready to early.
+	if (oppo_fp_notify_delay && mfd->oppo_commit_info) {
+		fingerprint_send_notify(info, 0x1, 1);
+		oppo_fp_notify_delay = false;
+	}
+#endif
 
 	if (wait_for_finish)
 		ret = mdss_fb_pan_idle(mfd);
@@ -4718,6 +5563,16 @@ static int mdss_fb_atomic_commit_ioctl(struct fb_info *info,
 	mfd = (struct msm_fb_data_type *)info->par;
 	if (!mfd)
 		return -EINVAL;
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	// Gou shengjun@PSW.MM.Driver.feature, 2018/08/17, add for fingerprint hbm
+	// Add for catch special layer's commit info
+	if (!(commit.commit_v1.flags & MDP_VALIDATE_LAYER)) {
+		mutex_lock(&layer_hbm_sync_mutex);
+		oppo_layer_interceptor(mfd, commit.commit_v1.reserved[MDP_LAYER_COMMIT_V1_PAD-1]);
+		mutex_unlock(&layer_hbm_sync_mutex);
+	}
+#endif
 
 	output_layer_user = commit.commit_v1.output_layer;
 	if (output_layer_user) {
