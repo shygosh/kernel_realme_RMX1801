@@ -1,0 +1,5 @@
+config OPPO_DEVICE_INFO
+	bool "config oppo devinfo"
+	depends on OPPO_VENDOR_EDIT
+	help
+	  define this config to compile devinfo.c for device register.

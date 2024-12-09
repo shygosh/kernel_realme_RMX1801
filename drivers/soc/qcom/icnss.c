@@ -3821,6 +3821,9 @@ static void icnss_read_device_configs(struct icnss_priv *priv)
 	}
 }
 
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+static void icnss_create_fw_state_kobj(void);
+#endif
 static int icnss_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -3896,6 +3899,12 @@ static int icnss_probe(struct platform_device *pdev)
 	penv = priv;
 
 	init_completion(&priv->unblock_shutdown);
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	//Laixin@PSW.CN.WiFi.Basic.Switch.1069763, 2018/08/08
+	//Add for: check fw status for switch issue
+	icnss_create_fw_state_kobj();
+#endif
 
 	icnss_pr_info("Platform driver probed successfully\n");
 
@@ -4088,6 +4097,30 @@ static struct platform_driver icnss_driver = {
 		.of_match_table = icnss_dt_match,
 	},
 };
+
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+//Laixin@PSW.CN.WiFi.Basic.Switch.1069763, 2018/08/08
+//Add for: check fw status for switch issue
+static ssize_t icnss_show_fw_ready(struct device_driver *driver, char *buf)
+{
+	return sprintf(buf, "%s", (icnss_is_fw_ready() ? "ready" : "not_ready"));
+}
+
+struct driver_attribute fw_ready_attr = {
+	.attr = {
+		.name = "firmware_ready",
+		.mode = S_IRUGO,
+	},
+	.show = icnss_show_fw_ready,
+	//read only so we don't need to impl store func
+};
+
+static void icnss_create_fw_state_kobj(void)
+{
+	if (driver_create_file(&(icnss_driver.driver), &fw_ready_attr))
+		icnss_pr_info("failed to create %s", fw_ready_attr.attr.name);
+}
+#endif
 
 static int __init icnss_initialize(void)
 {
