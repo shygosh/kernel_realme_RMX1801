@@ -1319,6 +1319,9 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 	if (icl_ua > pval.intval)
 		rerun_aicl = true;
 
+#ifndef CONFIG_OPPO_VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2018/01/09
+// Add for OPPO not use this
 	if (rerun_aicl && (chip->wa_flags & AICL_RERUN_WA_BIT)) {
 		/* set a lower ICL */
 		pval.intval = max(pval.intval - ICL_STEP_UA, ICL_STEP_UA);
@@ -1326,6 +1329,7 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 				POWER_SUPPLY_PROP_CURRENT_MAX,
 				&pval);
 	}
+#endif
 
 	/* set the effective ICL */
 	pval.intval = icl_ua;

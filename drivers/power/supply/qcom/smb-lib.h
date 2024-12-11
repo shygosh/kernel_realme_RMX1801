@@ -262,6 +262,10 @@ struct smb_charger {
 	struct power_supply_desc	usb_psy_desc;
 	struct power_supply		*usb_main_psy;
 	struct power_supply		*usb_port_psy;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+	/* Jianchao.Shi@BSP.CHG.Basic, 2017/03/07, sjc Add for charging*/
+	struct power_supply		*ac_psy;
+#endif
 	enum power_supply_type		real_charger_type;
 
 	/* notifiers */
@@ -274,6 +278,10 @@ struct smb_charger {
 	struct smb_regulator	*vbus_vreg;
 	struct smb_regulator	*vconn_vreg;
 	struct regulator	*dpdm_reg;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/12, sjc Add for BOB noise*/
+	struct regulator	*pm660l_bob_reg;
+#endif
 
 	/* votables */
 	struct votable		*dc_suspend_votable;
@@ -310,6 +318,10 @@ struct smb_charger {
 	struct work_struct	legacy_detection_work;
 	struct delayed_work	uusb_otg_work;
 	struct delayed_work	bb_removal_work;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* Jianchao.Shi@BSP.CHG.Basic, 2017/03/25, sjc Add for charging */
+	struct delayed_work	chg_monitor_work;
+#endif
 
 	/* cached status */
 	int			voltage_min_uv;
@@ -378,6 +390,10 @@ struct smb_charger {
 	int			pulse_cnt;
 
 	int			die_health;
+#ifdef CONFIG_OPPO_VENDOR_EDIT
+/* Jianchao.Shi@BSP.CHG.Basic, 2017/08/10, sjc Add for charging */
+	int			pre_current_ma;
+#endif
 };
 
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val);

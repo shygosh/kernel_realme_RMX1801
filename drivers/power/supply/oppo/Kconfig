@@ -1,0 +1,20 @@
+config OPPO_RTC_DET_SUPPORT
+	bool "OPPO RTC DET SUPPORT"
+	depends on OPPO_VENDOR_EDIT
+	depends on MFD_SPMI_PMIC
+	help
+	  Say Y to include support
+
+config OPPO_CHECK_CHARGERID_VOLT
+	bool "OPPO CHECK CHARGERID VOLT"
+	depends on OPPO_VENDOR_EDIT
+	depends on MFD_SPMI_PMIC
+	help
+	  Say Y to include support
+
+config OPPO_SHIP_MODE_SUPPORT
+	bool "OPPO_SHIP_MODE_SUPPORT"
+	depends on OPPO_VENDOR_EDIT
+	depends on MFD_SPMI_PMIC
+	help
+	  Say Y to include support
