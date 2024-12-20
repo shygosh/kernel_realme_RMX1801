@@ -45,6 +45,8 @@
     qcom,usb-icl-ua = <2000000>;
     qcom,fcc-max-ua = <2000000>;
     qcom,hvdcp-disable;
+    qcom,ufp-only-mode;
+    qcom,pd-not-supported;
     qcom,pm660chg-vadc = <&pm660_vadc>;
     qcom,float-option = <1>;
 
