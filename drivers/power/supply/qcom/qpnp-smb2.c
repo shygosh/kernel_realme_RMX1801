@@ -4128,17 +4128,31 @@ static int smb2_probe(struct platform_device *pdev)
 	/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging*/
 	if (of_find_property(oppo_chip->dev->of_node, "qcom,pm660chg-vadc", NULL)) {
 		// shygosh: Port to msm-4.19
-		oppo_chip->pmic_spmi.pm660_vadc_dev = devm_iio_channel_get(oppo_chip->dev, "pm660chg");
-		if (IS_ERR(oppo_chip->pmic_spmi.pm660_vadc_dev)) {
-			rc = PTR_ERR(oppo_chip->pmic_spmi.pm660_vadc_dev);
-			oppo_chip->pmic_spmi.pm660_vadc_dev = NULL;
-			if (rc != -EPROBE_DEFER)
-				chg_err("Couldn't get vadc rc=%d\n", rc);
-			else {
-				chg_err("Couldn't get vadc, try again...\n");
-				return -EPROBE_DEFER;
-			}
+#define ADC_GPIO1 0x12
+		struct iio_channel *iio_chan = iio_channel_get_all(oppo_chip->dev);
+		int i = 0;
+
+		if (IS_ERR(iio_chan)) {
+			rc = PTR_ERR(iio_chan);
+			if (rc == -EPROBE_DEFER)
+				return rc;
 		}
+
+		oppo_chip->pmic_spmi.pm660_vadc_dev = NULL;
+
+		while (iio_chan[i].indio_dev != NULL) {
+			if (&iio_chan[i].channel->address != NULL &&
+			    iio_chan[i].channel->address == ADC_GPIO1) {
+				oppo_chip->pmic_spmi.pm660_vadc_dev = &iio_chan[i];
+			} else {
+				iio_device_put(iio_chan[i].indio_dev);
+				kfree(&iio_chan[i]);
+			}
+			i++;
+		}
+
+		if (oppo_chip->pmic_spmi.pm660_vadc_dev == NULL)
+			chg_err("Failed to get pm660chg IIO channel, continuing anyway..\n");
 	}
 #endif
 

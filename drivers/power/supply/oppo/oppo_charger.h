@@ -30,6 +30,7 @@
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/iio/consumer.h>
+#include <linux/iio/iio.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/machine.h>
