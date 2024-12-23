@@ -287,20 +287,11 @@ static const struct apsd_result const smblib_apsd_results[] = {
 		.bit	= OCP_CHARGER_BIT,
 		.pst	= POWER_SUPPLY_TYPE_USB_DCP
 	},
-#ifndef CONFIG_OPPO_VENDOR_EDIT
-	// wenbin.liu@BSP.CHG.Basic, 2017/11/17, Add for float charger to DCP
 	[FLOAT] = {
 		.name	= "FLOAT",
 		.bit	= FLOAT_CHARGER_BIT,
 		.pst	= POWER_SUPPLY_TYPE_USB_FLOAT
 	},
-#else
-	[FLOAT] = {
-		.name	= "FLOAT",
-		.bit	= FLOAT_CHARGER_BIT,
-		.pst	= POWER_SUPPLY_TYPE_USB_DCP
-	},
-#endif
 	[HVDCP2] = {
 		.name	= "HVDCP2",
 		.bit	= DCP_CHARGER_BIT | QC_2P0_BIT,
@@ -662,11 +653,7 @@ static void smblib_rerun_apsd(struct smb_charger *chg)
 		smblib_err(chg, "Couldn't re-run APSD rc=%d\n", rc);
 }
 
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 static const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
-#else
-const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
-#endif
 {
 	const struct apsd_result *apsd_result = smblib_get_apsd_result(chg);
 
@@ -678,17 +665,9 @@ const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
 		 * Update real charger type only if its not FLOAT
 		 * detected as as SDP
 		 */
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 		if (!(apsd_result->pst == POWER_SUPPLY_TYPE_USB_FLOAT &&
 			chg->real_charger_type == POWER_SUPPLY_TYPE_USB))
 			chg->real_charger_type = apsd_result->pst;
-#else
-		if (!(apsd_result->pst == POWER_SUPPLY_TYPE_USB_FLOAT &&
-			chg->real_charger_type == POWER_SUPPLY_TYPE_USB)) {
-			chg->real_charger_type = apsd_result->pst;
-			chg->usb_psy_desc.type = apsd_result->pst;
-		}
-#endif
 	}
 
 	smblib_dbg(chg, PR_MISC, "APSD=%s PD=%d\n",

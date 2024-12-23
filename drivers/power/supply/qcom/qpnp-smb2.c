@@ -744,10 +744,10 @@ static int smb2_init_usb_psy(struct smb2 *chip)
 	struct smb_charger *chg = &chip->chg;
 
 	chg->usb_psy_desc.name			= "usb";
-	// wenbin.liu@BSP.CHG.Basic, 2017/09/22, Delete for usb init unknown
-	chg->usb_psy_desc.type			= IS_ENABLED(CONFIG_OPPO_VENDOR_EDIT) ?
-						  POWER_SUPPLY_TYPE_UNKNOWN :
-						  POWER_SUPPLY_TYPE_USB_PD;
+	// wenbin.liu@BSP.CHG.Basic, 2017/09/22, Modify for usb init USB
+	chg->usb_psy_desc.type			=
+		IS_ENABLED(CONFIG_OPPO_VENDOR_EDIT) ?
+			   POWER_SUPPLY_TYPE_USB : POWER_SUPPLY_TYPE_USB_PD;
 	chg->usb_psy_desc.properties		= smb2_usb_props;
 	chg->usb_psy_desc.num_properties	= ARRAY_SIZE(smb2_usb_props);
 	chg->usb_psy_desc.get_property		= smb2_usb_get_prop;
@@ -3524,11 +3524,6 @@ static int opchg_get_charger_type(void)
 			|| chg->real_charger_type == POWER_SUPPLY_TYPE_USB_CDP
 			|| chg->real_charger_type == POWER_SUPPLY_TYPE_USB_DCP) {
 		oppo_chg_soc_update();
-	}
-	/* wenbin.liu add for avoid sometime charger exist but type not get */
-	if (POWER_SUPPLY_TYPE_UNKNOWN == chg->real_charger_type) {
-		smblib_update_usb_type(chg);
-		chg_debug("Type Recovey Call, Type = %d\n", chg->real_charger_type);
 	}
 
 	if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB_CDP)
