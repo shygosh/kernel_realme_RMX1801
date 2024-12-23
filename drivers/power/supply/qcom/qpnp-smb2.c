@@ -4019,8 +4019,7 @@ static int force_dc_psy_update_write(void *data, u64 val)
 	power_supply_changed(chg->dc_psy);
 #else
 	/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/09, sjc Add for charging */
-	if (chg->dc_psy)
-		power_supply_changed(chg->dc_psy);
+	power_supply_changed(chg->ac_psy);
 #endif
 	return 0;
 }
@@ -4374,8 +4373,13 @@ cleanup:
 		power_supply_unregister(chg->usb_psy);
 	if (chg->usb_port_psy)
 		power_supply_unregister(chg->usb_port_psy);
+#ifndef CONFIG_OPPO_VENDOR_EDIT
 	if (chg->dc_psy)
 		power_supply_unregister(chg->dc_psy);
+#else
+	if (chg->ac_psy)
+		power_supply_unregister(chg->ac_psy);
+#endif
 	if (chg->vconn_vreg && chg->vconn_vreg->rdev)
 		devm_regulator_unregister(chg->dev, chg->vconn_vreg->rdev);
 	if (chg->vbus_vreg && chg->vbus_vreg->rdev)

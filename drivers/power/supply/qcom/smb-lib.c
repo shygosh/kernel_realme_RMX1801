@@ -4877,8 +4877,7 @@ irqreturn_t smblib_handle_dc_plugin(int irq, void *data)
 	power_supply_changed(chg->dc_psy);
 #else
 	/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/09, sjc Add for charging */
-	if (chg->dc_psy)
-		power_supply_changed(chg->dc_psy);
+	power_supply_changed(chg->ac_psy);
 #endif
 	return IRQ_HANDLED;
 }
