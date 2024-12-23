@@ -663,10 +663,10 @@ static const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
 	} else {
 		/*
 		 * Update real charger type only if its not FLOAT
-		 * detected as as SDP
+		 * detected as SDP
 		 */
-		if (!(apsd_result->pst == POWER_SUPPLY_TYPE_USB_FLOAT &&
-			chg->real_charger_type == POWER_SUPPLY_TYPE_USB))
+		if (apsd_result->pst != POWER_SUPPLY_TYPE_USB_FLOAT &&
+		    chg->real_charger_type == POWER_SUPPLY_TYPE_USB)
 			chg->real_charger_type = apsd_result->pst;
 	}
 
