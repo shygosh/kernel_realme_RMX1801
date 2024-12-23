@@ -23,11 +23,11 @@
 };
 
 &pm660_vadc{
-    chan@12{
-        label = "gpio2_adc";
-        reg = <0x12>; //channel for GPIO2
+    gpio1{
+        reg = <ADC_GPIO1>;
+        label = "gpio1";
         qcom,decimation = <2>;
-        qcom,pre-div-channel-scaling = <0>; //1:1 scaling
+        qcom,pre-div-channel-scaling = <0>;
         qcom,calibration-type = "absolute";
         qcom,scale-function = <0>;
         qcom,hw-settle-time = <2>;
