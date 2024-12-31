@@ -1,0 +1,19 @@
+/* Copyright shits here */
+
+&soc {
+	sdhc2_vdd_vreg: sdhc2_vdd_vreg {
+		compatible = "regulator-fixed";
+		regulator-name = "sdhc2_vdd_vreg";
+		startup-delay-us = <0>;
+		enable-active-high;
+		gpio = <&tlmm 52 0>;
+	};
+
+	touchpanel_vdd: touchpanel_vdd {
+		compatible = "regulator-fixed";
+		regulator-name = "touchpanel_vdd";
+		startup-delay-us = <0>;
+		enable-active-high;
+		gpio = <&tlmm 15 0>;
+	};
+};

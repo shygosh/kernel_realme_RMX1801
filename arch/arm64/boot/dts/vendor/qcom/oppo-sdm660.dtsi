@@ -1,0 +1,88 @@
+/* Copyright shits here */
+
+&firmware {
+	android {
+		fstab {
+			vendor {
+				fsmgr_flags = "wait,verify";
+			};
+		};
+	};
+};
+
+&removed_regions {
+	reg = <0x0 0x85800000 0x0 0x5300000>;
+};
+
+&adsp_fw_mem {
+	reg = <0x0 0x92a00000 0x0 0x2000000>;
+};
+
+&pil_mba_mem {
+	reg = <0x0 0x94a00000 0x0 0x200000>;
+};
+
+&cdsp_fw_mem {
+	reg = <0x0 0x94c00000 0x0 0x600000>;
+};
+
+&qcom_seecom {
+	reg = <0x86d00000 0x03E00000>;
+};
+
+&ufs1 {
+	/delete-property/ spm-level;
+};
+
+&pm660l_gpios {
+	key_vol_up {
+		key_vol_up_default: key_vol_up_default {
+			pins = "gpio3";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+		};
+	};
+
+	key_vol_down {
+		key_vol_down_default: key_vol_down_default {
+			pins = "gpio5";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+		};
+	};
+};
+
+&soc {
+	qcom,oembackup_sharedmem@0 {
+		compatible = "qcom,sharedmem-uio";
+		reg = <0x0 0x00100000>;
+		reg-names = "oembackup";
+		qcom,client-id = <0x00000004>;
+	};
+
+	gpio_keys {
+		/delete-property/ pinctrl-names;
+		/delete-property/ pinctrl-0;
+		/delete-property/ pinctrl-1;
+		/delete-node/ camera_focus;
+		/delete-node/ camera_snapshot;
+
+		vol_up {
+			gpios = <&pm660l_gpios 3 0x1>;
+		};
+
+		vol_down {
+			label = "volume_up";
+			gpios = <&pm660l_gpios 5 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
+			linux,can-disable;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+	};
+};

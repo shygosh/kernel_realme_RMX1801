@@ -1,3 +1,5 @@
+ifneq ($(CONFIG_OPPO_VENDOR_EDIT),y)
+
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
         dtbo-$(CONFIG_ARCH_KONA) += \
                 kona-cdp-overlay.dtbo \
@@ -420,6 +422,12 @@ dtb-$(CONFIG_ARCH_SDM429) += sdm429-mtp.dtb \
 	sdm429-qrd.dtb \
 	sda429-mtp.dtb \
 	sda429-cdp.dtb
+endif
+
+else
+
+dtb-y += oppo-RMX1801.dtb
+
 endif
 
 always		:= $(dtb-y)

@@ -1,0 +1,31 @@
+/* Copyright shits here */
+
+/dts-v1/;
+
+#include "sdm660.dtsi"
+#include "sdm660-mtp.dtsi"
+#include "msm-pm660a.dtsi"
+#include "sdm660-internal-codec.dtsi"
+
+#include "oppo-dsi-panel-oppo18316dpt_jdi_nt36672a_1080_2340_video.dtsi"
+#include "oppo-dsi-panel-oppo18316himax_hx83112a_1080_2280_video.dtsi"
+#include "oppo-msm-pm660a.dtsi"
+#include "oppo-msm-pm660l.dtsi"
+#include "oppo-pm660.dtsi"
+#include "oppo-sdm660-blsp.dtsi"
+#include "oppo-sdm660-common.dtsi"
+#include "oppo-sdm660-mdss-panels.dtsi"
+#include "oppo-sdm660-mdss.dtsi"
+#include "oppo-sdm660-mtp.dtsi"
+#include "oppo-sdm660-pinctrl.dtsi"
+#include "oppo-sdm660-regulator.dtsi"
+#include "oppo-sdm660.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SDM 660 PM660 + PM660A MTP";
+	compatible = "qcom,sdm660-mtp", "qcom,sdm660", "qcom,mtp";
+	qcom,board-id = <8 0>;
+	qcom,pmic-id = <0x0001001b 0x0001011a 0x0 0x0>,
+			<0x0001001b 0x0002001a 0x0 0x0>,
+			<0x0001001b 0x0202001a 0x0 0x0>;
+};

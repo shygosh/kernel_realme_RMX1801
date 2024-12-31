@@ -1,0 +1,17 @@
+/* Copyright shits here */
+
+&pm660l_wled {
+	status = "okay";
+};
+
+&pm660l_lcdb {
+	status = "disabled";
+};
+
+&pm660a_oledb {
+	status = "disabled";
+};
+
+&pm660a_labibb {
+	status = "disabled";
+};

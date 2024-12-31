@@ -1,0 +1,13 @@
+/* Copyright shits here */
+
+&mdss_dsi0 {
+	/delete-property/ wqhd-vddio-supply;
+	lab-supply = <&lab_regulator>;
+	ibb-supply = <&ibb_regulator>;
+};
+
+&mdss_dsi1 {
+	/delete-property/ wqhd-vddio-supply;
+	lab-supply = <&lab_regulator>;
+	ibb-supply = <&ibb_regulator>;
+};

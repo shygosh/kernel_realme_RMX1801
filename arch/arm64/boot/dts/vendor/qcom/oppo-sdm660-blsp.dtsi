@@ -1,0 +1,23 @@
+/* Copyright shits here */
+
+// shygosh: will be enabled later
+/*
+&i2c_2 {
+	status = "okay";
+};
+
+&i2c_2 {
+	status = "okay";
+};
+
+&i2c_6 {
+	status = "okay";
+	tfa98xx@35 {
+		compatible = "nxp,tfa98xx";
+		reg = <0x36>;
+		nxp,rst-ctrl-gpio = <&tlmm 80 0x00>;
+		tfa9890_vdd-supply = <&pm660_l13>;
+		status = "okay";
+	};
+};
+*/

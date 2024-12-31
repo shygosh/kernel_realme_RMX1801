@@ -1,0 +1,26 @@
+/* Copyright shits here */
+
+#include "oppo-dsi-panel-oppo18316himax_hx83112a_1080_2280_video.dtsi"
+#include "oppo-dsi-panel-oppo18316dpt_jdi_nt36672a_1080_2340_video.dtsi"
+
+&dsi_panel_pwr_supply_labibb_amoled {
+	qcom,panel-supply-entry@0 {
+		qcom,supply-name = "wqhd-vddio";
+		qcom,supply-min-voltage = <1800000>;
+		qcom,supply-max-voltage = <1800000>;
+		qcom,supply-enable-load = <32000>;
+		qcom,supply-disable-load = <80>;
+	};
+
+	qcom,panel-supply-entry@1 {
+		qcom,supply-name = "vdda-3p3";
+		qcom,supply-min-voltage = <3000000>;
+		qcom,supply-max-voltage = <3000000>;
+		qcom,supply-enable-load = <13200>;
+		qcom,supply-disable-load = <80>;
+	};
+
+	/delete-node/ qcom,panel-supply-entry@2;
+	/delete-node/ qcom,panel-supply-entry@3;
+	/delete-node/ qcom,panel-supply-entry@4;
+};
