@@ -215,30 +215,6 @@ struct oppo_chg_limits {
 	int warm_vfloat_over_sw_limit;
 };
 
-struct normalchg_gpio_pinctrl {
-	int chargerid_switch_gpio;
-	int usbid_gpio;
-	int usbid_irq;
-	int ship_gpio;
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *chargerid_switch_active;
-	struct pinctrl_state *chargerid_switch_sleep;
-	struct pinctrl_state *chargerid_switch_default;
-	struct pinctrl_state *usbid_active;
-	struct pinctrl_state *usbid_sleep;
-	struct pinctrl_state *ship_active;
-	struct pinctrl_state *ship_sleep;
-	struct pinctrl_state *charger_gpio_as_output1;
-	struct pinctrl_state *charger_gpio_as_output2;
-};
-struct usb_shell_ctrl_gpio_pinctrl {
-	int usb_shell_gpio;
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *usb_shell_ctrl_active;
-	struct pinctrl_state *usb_shell_ctrl_sleep;
-	struct pinctrl_state *usb_shell_ctrl_default;
-};
-
 struct qcom_pmic {
 	struct smb2 *smb2_chip;
 	struct iio_channel *pm660_vadc_dev;
@@ -271,7 +247,6 @@ struct oppo_chg_chip {
 	struct power_supply *batt_psy;
 	/* struct battery_data battery_main */
 	struct delayed_work update_work;
-	struct delayed_work mmi_adapter_in_work;
 	struct wake_lock suspend_lock;
 	atomic_t charger_suspended;
 
@@ -323,19 +298,13 @@ struct oppo_chg_chip {
 	bool led_status_change;
 	bool camera_on;
 	bool calling_on;
-
 	bool ac_online;
-	bool usb_shell_ctrl;
-	int mmi_chg;
-	int stop_chg;
-	int mmi_fastchg;
 
 	bool suspend_after_full;
 	bool check_batt_full_by_sw;
 	bool external_gauge;
 	bool chg_ctrl_by_lcd;
 	bool chg_ctrl_by_camera;
-	bool bq25890h_flag;
 	bool chg_ctrl_by_calling;
 	bool fg_bcl_poll;
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -343,25 +312,7 @@ struct oppo_chg_chip {
 #elif defined(CONFIG_FB)
 	struct notifier_block chg_fb_notify;
 #endif
-	struct normalchg_gpio_pinctrl normalchg_gpio;
-	struct usb_shell_ctrl_gpio_pinctrl usb_shell_ctrl_gpio;
-	int chargerid_volt;
-	bool chargerid_volt_got;
-	/*add for bq24190 charger_type detect*/
-	bool usb_enum_enable;
-	struct hrtimer usb_enum_hrtimer;
-	int usb_enum_type;
-	bool usb_enum_timeout;
 	bool overtemp_status;
-	struct hrtimer usb_distinguish_hrtimer;
-	int hrtimer_flag;
-};
-enum {
-	USB_ENUM_DISABLE = 0,
-	USB_ENUM_DEFAULT,
-	USB_ENUM_DETECTED,
-	USB_ENUM_TIMEOUT,
-	USB_ENUM_USB_TYPE,
 };
 
 struct oppo_chg_operations {
@@ -384,18 +335,10 @@ struct oppo_chg_operations {
 
 	int (*get_charger_type)(void);
 	int (*get_charger_volt)(void);
-	int (*get_chargerid_volt)(struct oppo_chg_chip *chip);
-	void (*set_chargerid_switch_val)(struct oppo_chg_chip *chip, int value);
-	int (*get_chargerid_switch_val)(struct oppo_chg_chip *chip);
-	void (*set_usb_shell_ctrl_val)(struct oppo_chg_chip *chip, int value);
-	int (*get_usb_shell_ctrl_val)(struct oppo_chg_chip *chip);
 	bool (*check_chrdet_status)(void);
 	int (*get_instant_vbatt)(void);
 	int (*get_rtc_soc)(void);
 	int (*set_rtc_soc)(int val);
-	void (*set_power_off)(void);
-	void (*usb_connect)(void);
-	void (*usb_disconnect)(void);
 	int (*get_aicl_ma)(struct oppo_chg_chip *chip);
 	void (*rerun_aicl)(struct oppo_chg_chip *chip);
 	int (*tlim_en)(struct oppo_chg_chip *chip, bool);
@@ -416,46 +359,15 @@ struct oppo_chg_operations {
  * Returns: 0 - success; -1/errno - failed
  **********************************************/
 int oppo_chg_parse_dt(struct oppo_chg_chip *chip);
-
 int oppo_chg_init(struct oppo_chg_chip *chip);
 void oppo_charger_detect_check(struct oppo_chg_chip *chip);
 int oppo_chg_get_prop_batt_health(struct oppo_chg_chip *chip);
-
 bool oppo_chg_wake_update_work(void);
 void oppo_chg_soc_update_when_resume(unsigned long sleep_tm_sec);
 void oppo_chg_soc_update(void);
-int oppo_chg_get_batt_volt(void);
-
-int oppo_chg_get_ui_soc(void);
-int oppo_chg_get_soc(void);
-int oppo_chg_get_chg_temperature(void);
-
-void oppo_chg_disable_charge(void);
-void oppo_chg_unsuspend_charger(void);
-
-int oppo_chg_get_chg_type(void);
-
-int oppo_chg_get_notify_flag(void);
-
-bool oppo_chg_get_batt_full(void);
-bool oppo_chg_get_rechging_status(void);
-
-bool oppo_chg_check_chip_is_null(void);
-void oppo_chg_set_charger_type_unknown(void);
-int oppo_chg_get_charger_voltage(void);
-void oppo_chg_set_chargerid_switch_val(int value);
-void oppo_set_usb_shell_ctrl(int value);
-int oppo_get_usb_shell_ctrl(void);
 void oppo_chg_turn_on_charging(struct oppo_chg_chip *chip);
-
 void oppo_chg_turn_off_charging(struct oppo_chg_chip *chip);
-void oppo_chg_turn_on_charging(struct oppo_chg_chip *chip);
-void oppo_chg_clear_chargerid_info(void);
 void oppo_chg_variables_reset(struct oppo_chg_chip *chip, bool in);
-void oppo_chg_external_power_changed(struct power_supply *psy);
-int oppo_is_rf_ftm_mode(void);
-//huangtongfeng@BSP.CHG.Basic, 2017/01/13, add for kpoc charging param.
-int oppo_get_charger_chip_st(void);
 
 extern struct oppo_chg_chip *g_oppo_chg_chip;
 

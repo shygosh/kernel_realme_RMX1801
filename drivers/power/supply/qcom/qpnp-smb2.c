@@ -29,10 +29,6 @@
 
 #define SMB2_DEFAULT_WPWR_UW	8000000
 
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-static int smbchg_chargerid_switch_gpio_init(struct oppo_chg_chip *chip);
-#endif
-
 static struct smb_params v1_params = {
 	.fcc			= {
 		.name	= "fast charge current",
@@ -403,39 +399,6 @@ static int smb2_parse_dt(struct smb2 *chip)
 
 	chg->ufp_only_mode = of_property_read_bool(node,
 					"qcom,ufp-only-mode");
-
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging */
-	if (g_oppo_chg_chip) {
-		g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio =
-			  of_get_named_gpio(node, "qcom,chargerid_switch-gpio", 0);
-		if (g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio <= 0) {
-			chg_err("Couldn't read chargerid_switch-gpio rc = %d, chargerid_switch_gpio:%d\n", 
-				rc, g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio);
-		} else {
-			if (gpio_is_valid(g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio)) {
-				rc = gpio_request(g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio,
-						  "charging-switch1-gpio");
-				if (rc) {
-					chg_err("unable to request chargerid_switch_gpio:%d\n",
-						g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio);
-				} else {
-					smbchg_chargerid_switch_gpio_init(g_oppo_chg_chip);
-				}
-			}
-			chg_err("chargerid_switch_gpio:%d\n", g_oppo_chg_chip->normalchg_gpio.chargerid_switch_gpio);
-		}
-	}
-
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/12, sjc Add for BOB noise */
-	if (!chg->pm660l_bob_reg && of_get_property(node, "qcom,pm660l-bob-supply", NULL)) {
-		chg->pm660l_bob_reg = devm_regulator_get(chg->dev, "pm660l_bob");
-		if (IS_ERR(chg->pm660l_bob_reg)) {
-			chg_err("Couldn't get pm660l_bob regulator rc=%ld\n", PTR_ERR(chg->pm660l_bob_reg));
-			chg->pm660l_bob_reg = NULL;
-		}
-	}
-#endif
 
 	return 0;
 }
@@ -1120,12 +1083,6 @@ static int ac_get_property(struct power_supply *psy,
 		} else {
 			g_oppo_chg_chip->ac_online = false;
 		}
-	} else {
-		if (g_oppo_chg_chip->mmi_fastchg == 0) {
-			g_oppo_chg_chip->ac_online = true;
-		} else {
-			g_oppo_chg_chip->ac_online = false;
-		}
 	}
 
 	switch (psp) {
@@ -1212,13 +1169,11 @@ static enum power_supply_property smb2_batt_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_AUTHENTICATE,
 	POWER_SUPPLY_PROP_CHARGE_TIMEOUT,
-	POWER_SUPPLY_PROP_MMI_CHARGING_ENABLE,
 	POWER_SUPPLY_PROP_BATTERY_FCC,
 	POWER_SUPPLY_PROP_BATTERY_SOH,
 	POWER_SUPPLY_PROP_BATTERY_CC,
 	POWER_SUPPLY_PROP_BATTERY_RM,
 	POWER_SUPPLY_PROP_BATTERY_NOTIFY_CODE,
-	POWER_SUPPLY_PROP_CHARGERID_VOLT,
 	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
 	POWER_SUPPLY_PROP_CALL_MODE,
 #endif
@@ -1465,13 +1420,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		else
 			val->intval = false;
 		break;
-	// add for MMI_CHG TEST
-	case POWER_SUPPLY_PROP_MMI_CHARGING_ENABLE:
-		if (g_oppo_chg_chip)
-			val->intval = g_oppo_chg_chip->mmi_chg;
-		else
-			val->intval = 1;
-		break;
 	case POWER_SUPPLY_PROP_BATTERY_FCC:
 		if (g_oppo_chg_chip)
 			val->intval = g_oppo_chg_chip->batt_fcc;
@@ -1505,12 +1453,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
 	case POWER_SUPPLY_PROP_CALL_MODE:
 		val->intval = g_oppo_chg_chip->calling_on;
-		break;
-	case POWER_SUPPLY_PROP_CHARGERID_VOLT:
-		if (g_oppo_chg_chip)
-			val->intval = g_oppo_chg_chip->chargerid_volt;
-		else
-			val->intval = 0;
 		break;
 #endif
 	default:
@@ -1615,23 +1557,6 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 		power_supply_changed(chg->batt_psy);
 		break;
 #ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Add for charging */
-	case POWER_SUPPLY_PROP_MMI_CHARGING_ENABLE:
-		if (g_oppo_chg_chip) {
-			if (val->intval == 0) {
-				chg_err("mmi_chg: set 0\n");
-				g_oppo_chg_chip->mmi_chg = 0;
-				oppo_chg_turn_off_charging(g_oppo_chg_chip);
-			} else {
-				chg_err("mmi_chg: set 1\n");
-				g_oppo_chg_chip->mmi_chg = 1;
-				if (g_oppo_chg_chip->mmi_fastchg == 0)
-					oppo_chg_clear_chargerid_info();
-				g_oppo_chg_chip->mmi_fastchg = 1;
-				oppo_chg_turn_on_charging(g_oppo_chg_chip);
-			}
-		}
-		break;
 	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
 	case POWER_SUPPLY_PROP_CALL_MODE:
 		g_oppo_chg_chip->calling_on = val->intval;
@@ -1660,8 +1585,6 @@ static int smb2_batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SW_JEITA_ENABLED:
 	case POWER_SUPPLY_PROP_DIE_HEALTH:
 #ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Add for charging*/
-	case POWER_SUPPLY_PROP_MMI_CHARGING_ENABLE:
 	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
 	case POWER_SUPPLY_PROP_CALL_MODE:
 #endif
@@ -2824,107 +2747,6 @@ static void smb2_create_debugfs(struct smb2 *chip)
 
 #endif
 
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/12, sjc Add for BOB noise*/
-#define REGULATOR_MODE_FAST			0x1
-#define REGULATOR_MODE_NORMAL			0x2
-#define REGULATOR_MODE_IDLE			0x4
-#define REGULATOR_MODE_STANDBY			0x8
-
-int pm660l_bob_regulator_get_mode(unsigned int *mode)
-{
-	int rc;
-	unsigned int bob_mode;
-	struct smb_charger *chg = NULL;
-
-	if (!g_oppo_chg_chip) {
-		printk(KERN_ERR "pm660l_bob_regulator_get_mode: g_oppo_chg_chip NULL\n");
-		return -1;
-	}
-	chg = &g_oppo_chg_chip->pmic_spmi.smb2_chip->chg;
-
-	if (!chg || !chg->pm660l_bob_reg) {
-		printk(KERN_ERR "%s: pm660l_bob_reg NULL\n", __func__);
-		return -1;
-	}
-
-	rc = regulator_enable(chg->pm660l_bob_reg);
-	if (rc < 0) {
-		printk(KERN_ERR "%s: Couldn't enable regulator rc=%d\n", __func__, rc);
-		return -1;
-	}
-
-	bob_mode = regulator_get_mode(chg->pm660l_bob_reg);
-	if (bob_mode != REGULATOR_MODE_FAST && bob_mode != REGULATOR_MODE_NORMAL
-			&& bob_mode != REGULATOR_MODE_IDLE && bob_mode != REGULATOR_MODE_STANDBY) {
-		printk(KERN_ERR "%s: Couldn't get regulator mode=%d\n", __func__, bob_mode);
-		*mode = 0;
-		goto err;
-	}
-	*mode = bob_mode;
-
-err:
-	rc = regulator_disable(chg->pm660l_bob_reg);
-	if (rc < 0) {
-		printk(KERN_ERR "%s: Couldn't disable regulator rc=%d\n", __func__, rc);
-		return -1;
-	}
-
-	return rc;
-}
-EXPORT_SYMBOL_GPL(pm660l_bob_regulator_get_mode);
-
-/*return -1 for error, return 0 for ok, return 1 for invalid*/
-int pm660l_bob_regulator_set_mode(unsigned int mode)
-{
-	int rc;
-	int ua_load;
-	static unsigned int pre_mode = 0;
-	struct smb_charger *chg = NULL;
-
-	if (!g_oppo_chg_chip) {
-		printk(KERN_ERR "%s: g_oppo_chg_chip NULL\n", __func__);
-		return -1;
-	}
-	chg = &g_oppo_chg_chip->pmic_spmi.smb2_chip->chg;
-
-	if (!chg || !chg->pm660l_bob_reg) {
-		printk(KERN_ERR "%s: pm660l_bob_reg NULL\n", __func__);
-		return -1;
-	}
-
-	if (mode != REGULATOR_MODE_FAST && mode != REGULATOR_MODE_NORMAL) {
-		printk(KERN_ERR "%s: Invalid mode: %d", __func__, mode);
-		return -1;
-	}
-
-	if (pre_mode == mode) {
-		printk(KERN_ERR "%s: pre_mode[%d], mode[%d], return\n", __func__, pre_mode, mode);
-		return 1;
-	}
-
-	if (mode == REGULATOR_MODE_FAST) {
-			ua_load = 2000000;
-		rc = regulator_set_load(chg->pm660l_bob_reg, ua_load);
-		if (rc < 0) {
-			printk(KERN_ERR "%s: Couldn't set regulator load=%d rc=%d\n", __func__, ua_load, rc);
-			return -1;
-		}
-		pre_mode = mode;
-	} else if (mode == REGULATOR_MODE_NORMAL) {
-		ua_load = 0;
-		rc = regulator_set_load(chg->pm660l_bob_reg, ua_load);
-		if (rc < 0) {
-			printk(KERN_ERR "%s: Couldn't set regulator load=%d rc=%d\n", __func__, ua_load, rc);
-			return -1;
-		}
-		pre_mode = mode;
-	}
-	return 0;
-}
-EXPORT_SYMBOL_GPL(pm660l_bob_regulator_set_mode);
-#endif
-
 static int smb2_probe(struct platform_device *pdev)
 {
 	struct smb2 *chip;
@@ -2978,35 +2800,6 @@ static int smb2_probe(struct platform_device *pdev)
 #ifdef CONFIG_OPPO_VENDOR_EDIT
 	/* Jianchao.Shi@BSP.CHG.Basic, 2017/08/10, sjc Add for charging */
 	chg->pre_current_ma = -1;
-#endif
-
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging*/
-	if (of_find_property(oppo_chip->dev->of_node, "qcom,pm660chg-vadc", NULL)) {
-		// shygosh: Port to msm-4.19
-#define ADC7_VDC_16 0x12
-		struct iio_channel *iio_chan = iio_channel_get_all(oppo_chip->dev);
-		int i = 0;
-
-		if (IS_ERR(iio_chan)) {
-			rc = PTR_ERR(iio_chan);
-			if (rc == -EPROBE_DEFER)
-				return rc;
-		}
-
-		while (iio_chan[i].indio_dev != NULL) {
-			if (iio_chan[i].channel->address == ADC7_VDC_16) {
-				oppo_chip->pmic_spmi.pm660_vadc_dev = &iio_chan[i];
-			} else {
-				iio_device_put(iio_chan[i].indio_dev);
-				kfree(&iio_chan[i]);
-			}
-			i++;
-		}
-
-		if (oppo_chip->pmic_spmi.pm660_vadc_dev == NULL)
-			chg_err("unable to get pm660_vadc_dev ADC7_VDC_16\n");
-	}
 #endif
 
 	chg->regmap = dev_get_regmap(chg->dev->parent, NULL);
@@ -3265,14 +3058,6 @@ static void smb2_shutdown(struct platform_device *pdev)
 {
 	struct smb2 *chip = platform_get_drvdata(pdev);
 	struct smb_charger *chg = &chip->chg;
-
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging */
-	if (g_oppo_chg_chip) {
-		smbchg_set_chargerid_switch_val(g_oppo_chg_chip, 0);
-		msleep(30);
-	}
-#endif
 
 	/* disable all interrupts */
 	smb2_disable_interrupts(chg);

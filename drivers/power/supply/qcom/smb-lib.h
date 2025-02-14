@@ -278,10 +278,6 @@ struct smb_charger {
 	struct smb_regulator	*vbus_vreg;
 	struct smb_regulator	*vconn_vreg;
 	struct regulator	*dpdm_reg;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/12, sjc Add for BOB noise*/
-	struct regulator	*pm660l_bob_reg;
-#endif
 
 	/* votables */
 	struct votable		*dc_suspend_votable;

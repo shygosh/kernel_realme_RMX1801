@@ -62,7 +62,6 @@ static void oppo_chg_update_work(struct work_struct *work);
 static void oppo_chg_protection_check(struct oppo_chg_chip *chip);
 static void oppo_chg_get_battery_data(struct oppo_chg_chip *chip);
 static void oppo_chg_check_tbatt_status(struct oppo_chg_chip *chip);
-static void oppo_chg_get_chargerid_voltage(struct oppo_chg_chip *chip);
 static void oppo_chg_set_input_current_limit(struct oppo_chg_chip *chip);
 static void oppo_chg_battery_update_status(struct oppo_chg_chip *chip);
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -143,13 +142,9 @@ static ssize_t chg_cycle_write(struct file *file, const char __user *buff, size_
 	if (strncmp(proc_chg_cycle_data, "en808", 5) == 0) {
 		g_oppo_chg_chip->chg_ops->charger_unsuspend(g_oppo_chg_chip);
 		g_oppo_chg_chip->chg_ops->charging_enable(g_oppo_chg_chip);
-		g_oppo_chg_chip->mmi_chg = 1;
-		g_oppo_chg_chip->stop_chg = 1;
 	} else if (strncmp(proc_chg_cycle_data, "dis808", 6) == 0) {
 		g_oppo_chg_chip->chg_ops->charging_disable(g_oppo_chg_chip);
 		g_oppo_chg_chip->chg_ops->charger_suspend(g_oppo_chg_chip);
-		g_oppo_chg_chip->mmi_chg = 0;
-		g_oppo_chg_chip->stop_chg = 0;
 	} else {
 		return -EFAULT;
 	}
@@ -319,60 +314,6 @@ static void init_proc_charging_feature(void)
 		pr_err("proc_create charging_feature_fops fail!\n");
 	}
 }
-/*ye.zhang add end*/
-static void mmi_adapter_in_work_func(struct work_struct *work)
-{
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct oppo_chg_chip *chip = container_of(dwork, struct oppo_chg_chip, mmi_adapter_in_work);
-	chip->mmi_fastchg = 1;
-}
-static void oppo_mmi_fastchg_in(struct oppo_chg_chip *chip)
-{
-	schedule_delayed_work(&chip->mmi_adapter_in_work,
-			      round_jiffies_relative(msecs_to_jiffies(2000)));
-}
-
-enum hrtimer_restart usb_enum_timerout_interrupt(struct hrtimer *timer)
-{
-	if (g_oppo_chg_chip == NULL) {
-		return HRTIMER_NORESTART;
-	}
-	if (g_oppo_chg_chip->usb_enum_type == USB_ENUM_DEFAULT) {
-		g_oppo_chg_chip->usb_enum_type = USB_ENUM_TIMEOUT;
-		g_oppo_chg_chip->charger_type = POWER_SUPPLY_TYPE_USB_DCP;
-		oppo_chg_wake_update_work();
-	}
-	return HRTIMER_NORESTART;
-}
-void usb_enum_timer_init(void)
-{
-	if (g_oppo_chg_chip == NULL) {
-		return;
-	}
-	hrtimer_init(&g_oppo_chg_chip->usb_enum_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	g_oppo_chg_chip->usb_enum_hrtimer.function = usb_enum_timerout_interrupt;
-}
-
-enum hrtimer_restart usb_distinguish_timerout_interrupt(struct hrtimer *timer)
-{
-	if (g_oppo_chg_chip == NULL) {
-		return 0;
-	}
-	printk("usb_distinguish_timerout_interrupt\n");
-	g_oppo_chg_chip->charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
-	printk("g_oppo_chg_chip->charger_type =%d\n", g_oppo_chg_chip->charger_type);
-	g_oppo_chg_chip->hrtimer_flag = 1;
-	oppo_chg_wake_update_work();
-	return 0;
-}
-void usb_distinguish_timer_init(void)
-{
-	if (g_oppo_chg_chip == NULL) {
-		return;
-	}
-	hrtimer_init(&g_oppo_chg_chip->usb_distinguish_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	g_oppo_chg_chip->usb_distinguish_hrtimer.function = usb_distinguish_timerout_interrupt;
-}
 
 int oppo_chg_init(struct oppo_chg_chip *chip)
 {
@@ -431,15 +372,10 @@ int oppo_chg_init(struct oppo_chg_chip *chip)
 	init_proc_chg_log();
 	init_proc_chg_cycle();
 	init_proc_critical_log();
-	if (chip->usb_enum_enable) {
-		usb_enum_timer_init();
-		usb_distinguish_timer_init();
-	}
 	/*ye.zhang@BSP.Sensor.Function, 2017-03-30, add interface for charging special feature in different projects*/
 	init_proc_charging_feature();
 	/*ye.zhang add end*/
 	schedule_delayed_work(&chip->update_work, OPPO_CHG_UPDATE_INIT_DELAY);
-	INIT_DELAYED_WORK(&chip->mmi_adapter_in_work, mmi_adapter_in_work_func);
 
 	return 0;
 batt_psy_reg_failed:
@@ -471,20 +407,6 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 		}
 	}
 
-	chip->usb_shell_ctrl_gpio.usb_shell_gpio =
-		of_get_named_gpio(node, "qcom,usb_shell_ctrl_gpio", 0);
-	if (chip->usb_shell_ctrl_gpio.usb_shell_gpio <= 0) {
-		dev_err(chip->dev, "Couldn't read chargerid_switch-gpio, usb_shell_ctrl_gpio:%d\n",
-			chip->usb_shell_ctrl_gpio.usb_shell_gpio);
-	} else {
-		if (gpio_is_valid(chip->usb_shell_ctrl_gpio.usb_shell_gpio)) {
-			rc = gpio_request(chip->usb_shell_ctrl_gpio.usb_shell_gpio,
-							  "usb-shell-ctrl-gpio");
-		}
-	}
-	chip->usb_shell_ctrl = of_property_read_bool(node, "qcom,usb_shell_ctrl");
-
-	chip->usb_enum_enable = of_property_read_bool(node, "qcom,usb_enum_enable");
 	/*hardware init*/
 	rc = of_property_read_u32(node, "qcom,input_current_charger_ma",
 				  &chip->limits.input_current_charger_ma);
@@ -513,10 +435,6 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 	if (rc) {
 		chip->limits.input_current_led_ma_forcmcc = 500;
 	}
-
-#ifdef OPPO_CMCC_TEST
-	chip->limits.input_current_led_ma = chip->limits.input_current_led_ma_forcmcc;
-#endif
 
 	rc = of_property_read_u32(node, "qcom,input_current_camera_ma",
 				  &chip->limits.input_current_camera_ma);
@@ -784,6 +702,7 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 	if (rc < 0) {
 		chip->limits.warm_vfloat_over_sw_limit = 4080;
 	}
+
 	rc = of_property_read_u32(node, "qcom,max_chg_time_sec", &chip->limits.max_chg_time_sec);
 	if (rc < 0) {
 		chip->limits.max_chg_time_sec = 36000;
@@ -814,15 +733,11 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 	}
 
 	chip->suspend_after_full = of_property_read_bool(node, "qcom,suspend_after_full");
-
 	chip->check_batt_full_by_sw = of_property_read_bool(node, "qcom,check_batt_full_by_sw");
-
 	chip->external_gauge = of_property_read_bool(node, "qcom,external_gauge");
 	chip->fg_bcl_poll = of_property_read_bool(node, "qcom,fg_bcl_poll_enable");
-
 	chip->chg_ctrl_by_lcd = of_property_read_bool(node, "qcom,chg_ctrl_by_lcd");
 	chip->chg_ctrl_by_camera = of_property_read_bool(node, "qcom,chg_ctrl_by_camera");
-	chip->bq25890h_flag = of_property_read_bool(node, "qcom,bq25890_flag");
 	chip->chg_ctrl_by_calling = of_property_read_bool(node, "qcom,chg_ctrl_by_calling");
 
 	return 0;
@@ -880,8 +795,6 @@ static void oppo_chg_set_input_current_limit(struct oppo_chg_chip *chip)
 	int current_limit = 0;
 
 	switch (chip->charger_type) {
-	case POWER_SUPPLY_TYPE_UNKNOWN:
-		return;
 	case POWER_SUPPLY_TYPE_USB:
 		current_limit = chip->limits.input_current_usb_ma;
 		break;
@@ -914,19 +827,6 @@ static void oppo_chg_set_input_current_limit(struct oppo_chg_chip *chip)
 	    (chip->overtemp_status) &&
 	    (current_limit > chip->limits.input_current_led_ma_overtemp)) {
 		current_limit = chip->limits.input_current_led_ma_overtemp;
-	}
-	if (chip->usb_enum_enable) {
-		if (chip->usb_enum_type == USB_ENUM_DEFAULT) {
-			if (chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP) {
-				if (current_limit > 900) {
-					current_limit = 900;
-				}
-			}
-		} else if (chip->usb_enum_type == USB_ENUM_DETECTED) {
-			if (current_limit > chip->limits.input_current_usb_ma) {
-				current_limit = chip->limits.input_current_usb_ma;
-			}
-		}
 	}
 	chip->chg_ops->input_current_write(chip, current_limit);
 }
@@ -979,9 +879,6 @@ static void oppo_chg_set_float_voltage(struct oppo_chg_chip *chip)
 #define VFLOAT_OVER_NUM 2
 static void oppo_chg_vfloat_over_check(struct oppo_chg_chip *chip)
 {
-	if (!chip->mmi_chg) {
-		return;
-	}
 	if (chip->charging_state == CHARGING_STATUS_FULL) {
 		return;
 	}
@@ -1046,7 +943,7 @@ static void oppo_chg_check_vbatt_higher_than_4180mv(struct oppo_chg_chip *chip)
 	static bool vol_high_pre = false;
 	static int lower_count = 0, higher_count = 0;
 
-	if (!chip->mmi_chg || chip->tbatt_status != BATTERY_STATUS__COOL_TEMP) {
+	if (chip->tbatt_status != BATTERY_STATUS__COOL_TEMP) {
 		vbatt_higherthan_4180mv = false;
 		vol_high_pre = false;
 		lower_count = 0;
@@ -1082,9 +979,6 @@ static void oppo_chg_check_vbatt_higher_than_4180mv(struct oppo_chg_chip *chip)
 void oppo_chg_turn_on_charging(struct oppo_chg_chip *chip)
 {
 	if (!chip->authenticate) {
-		return;
-	}
-	if (!chip->mmi_chg) {
 		return;
 	}
 	chip->chg_ops->hardware_init(chip);
@@ -1461,21 +1355,10 @@ static bool oppo_chg_check_vbatt_is_good(struct oppo_chg_chip *chip)
 
 static bool oppo_chg_check_time_is_good(struct oppo_chg_chip *chip)
 {
-#ifdef SELL_MODE
-	/* Qiao.Hu@BSP.BaseDrv.CHG.Basic, 2017/10/26, delete over_time for sell_mode */
-	chip->chging_over_time = false;
-	printk("oppo_chg_check_time_is_good_sell_mode\n");
-	return true;
-#endif //SELL_MODE
-#ifdef OPPO_CMCC_TEST
-	chip->chging_over_time = false;
-	return true;
-#else /*OPPO_CMCC_TEST*/
 	if (chip->limits.max_chg_time_sec < 0) {
 		chip->chging_over_time = false;
 		return true;
 	}
-#endif /*OPPO_CMCC_TEST*/
 	if (chip->total_time >= chip->limits.max_chg_time_sec) {
 		chip->total_time = chip->limits.max_chg_time_sec;
 		chip->chging_over_time = true;
@@ -1647,15 +1530,6 @@ void oppo_chg_variables_reset(struct oppo_chg_chip *chip, bool in)
 
 	chip->stop_voter = 0x00;
 	chip->charging_state = CHARGING_STATUS_CCCV;
-#ifndef SELL_MODE
-	/* Qiao.Hu@BSP.BaseDrv.CHG.Basic, 2017/12/12, delete for sell_mode */
-	if (chip->mmi_fastchg == 0) {
-		chip->mmi_chg = 0;
-	}
-	else {
-		chip->mmi_chg = 1;
-	}
-#endif //SELL_MODE
 	chip->notify_code = 0;
 	chip->notify_flag = 0;
 	chip->limits.cold_bat_decidegc = chip->anti_shake_bound.cold_bound;
@@ -1682,7 +1556,6 @@ static void oppo_chg_variables_init(struct oppo_chg_chip *chip)
 	chip->charger_volt = 0;
 	chip->vchg_status = CHARGER_STATUS__GOOD;
 	chip->prop_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-
 	chip->batt_exist = true;
 	chip->batt_full = false;
 	chip->tbatt_status = BATTERY_STATUS__NORMAL;
@@ -1690,7 +1563,6 @@ static void oppo_chg_variables_init(struct oppo_chg_chip *chip)
 	chip->total_time = 0;
 	chip->chging_over_time = 0;
 	chip->in_rechging = 0;
-
 	chip->batt_volt = 3800;
 	chip->icharging = 0;
 	chip->temperature = 250;
@@ -1700,16 +1572,10 @@ static void oppo_chg_variables_init(struct oppo_chg_chip *chip)
 	chip->notify_flag = 0;
 	chip->request_power_off = 0;
 	chip->tbatt_pre_shake = TBATT_PRE_SHAKE_INVALID;
-
 	chip->led_on = true;
 	chip->camera_on = 0;
-
 	chip->stop_voter = 0x00;
 	chip->charging_state = CHARGING_STATUS_CCCV;
-	chip->mmi_chg = 1;
-	chip->stop_chg = 1;
-	chip->mmi_fastchg = 1;
-
 	chip->anti_shake_bound.cold_bound = chip->limits.cold_bat_decidegc;
 	chip->anti_shake_bound.little_cold_bound = chip->limits.little_cold_bat_decidegc;
 	chip->anti_shake_bound.cool_bound = chip->limits.cool_bat_decidegc;
@@ -1717,13 +1583,9 @@ static void oppo_chg_variables_init(struct oppo_chg_chip *chip)
 	chip->anti_shake_bound.normal_bound = chip->limits.normal_bat_decidegc;
 	chip->anti_shake_bound.warm_bound = chip->limits.warm_bat_decidegc;
 	chip->anti_shake_bound.hot_bound = chip->limits.hot_bat_decidegc;
-
 	chip->anti_shake_bound.overtemp_bound = chip->limits.overtemp_bat_decidegc;
 	chip->overtemp_status = false;
-
 	chip->limits.vfloat_over_counts = 0;
-	chip->chargerid_volt = 0;
-	chip->chargerid_volt_got = false;
 }
 
 static void oppo_chg_fail_action(struct oppo_chg_chip *chip)
@@ -1789,45 +1651,16 @@ void oppo_charger_detect_check(struct oppo_chg_chip *chip)
 		if (chip->charger_type == POWER_SUPPLY_TYPE_UNKNOWN) {
 			oppo_chg_variables_reset(chip, true);
 			chip->charger_type = chip->chg_ops->get_charger_type();
-			if (chip->usb_enum_enable) {
-				if (chip->charger_type != POWER_SUPPLY_TYPE_USB &&
-				    chip->usb_enum_type == USB_ENUM_DEFAULT) {
-					chip->charger_type = POWER_SUPPLY_TYPE_USB_DCP;
-				}
-			}
-			oppo_set_usb_shell_ctrl(0);
-
 			charger_resumed = chip->chg_ops->check_charger_resume(chip);
 			oppo_chg_turn_on_charging(chip);
 		} else {
-			chip->hrtimer_flag = 0;
-
 			if (charger_resumed == false) {
 				charger_resumed = chip->chg_ops->check_charger_resume(chip);
 				oppo_chg_turn_on_charging(chip);
-			} else if (chip->usb_enum_enable &&
-				   (chip->usb_enum_type == USB_ENUM_TIMEOUT ||
-				    chip->usb_enum_type == USB_ENUM_DETECTED) &&
-				   !chip->usb_enum_timeout) {
-				oppo_chg_set_input_current_limit(chip);
-			}
-
-			if (chip->usb_enum_enable &&
-			    (chip->usb_enum_type == USB_ENUM_TIMEOUT ||
-			     chip->usb_enum_type == USB_ENUM_DETECTED) &&
-			    !chip->usb_enum_timeout) {
-				if (chip->chg_ops->usb_disconnect &&
-				    chip->usb_enum_type == USB_ENUM_TIMEOUT) {
-					chip->chg_ops->usb_disconnect();
-				}
-				chip->usb_enum_timeout = true;
 			}
 		}
 	} else {
 		oppo_chg_variables_reset(chip, false);
-		if (!chip->mmi_fastchg) {
-			oppo_mmi_fastchg_in(chip);
-		}
 		oppo_gauge_set_batt_full(false);
 		if (chip->chg_ops->get_charging_enable(chip) == true) {
 			oppo_chg_turn_off_charging(chip);
@@ -1852,7 +1685,6 @@ static void oppo_chg_get_battery_data(struct oppo_chg_chip *chip)
 	chip->batt_cc = oppo_gauge_get_batt_cc();
 	chip->batt_soh = oppo_gauge_get_batt_soh();
 	chip->batt_rm = oppo_gauge_get_remaining_capacity();
-
 	chip->charger_volt = chip->chg_ops->get_charger_volt();
 
 	if (ui_soc_cp_flag == 0) {
@@ -1981,11 +1813,9 @@ static void oppo_chg_protection_check(struct oppo_chg_chip *chip)
 	}
 #endif
 
-	/*#ifndef OPPO_CMCC_TEST*/
-	if (false == oppo_chg_check_time_is_good(chip)) {
+	if (!oppo_chg_check_time_is_good(chip)) {
 		oppo_chg_voter_charging_stop(chip, CHG_STOP_VOTER__MAX_CHGING_TIME);
 	}
-	/*#endif*/
 
 	oppo_chg_check_vbatt_higher_than_4180mv(chip);
 
@@ -2217,8 +2047,8 @@ static void oppo_chg_update_ui_soc(struct oppo_chg_chip *chip)
 	} else {
 		soc_up_limit = SOC_SYNC_UP_RATE_10S;
 	}
-	if (chip->charger_exist && chip->batt_exist && chip->batt_full && chip->mmi_chg &&
-	    (chip->stop_chg == 1 || chip->charger_type == 5)) {
+	if (chip->charger_exist && chip->batt_exist && chip->batt_full &&
+	    chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP) {
 		chip->sleep_tm_sec = 0;
 		if ((chip->tbatt_status == BATTERY_STATUS__NORMAL) ||
 		    (chip->tbatt_status == BATTERY_STATUS__LITTLE_COOL_TEMP) ||
@@ -2240,8 +2070,8 @@ static void oppo_chg_update_ui_soc(struct oppo_chg_chip *chip)
 			chip->prop_status = POWER_SUPPLY_STATUS_FULL;
 		}
 	} else if (chip->charger_exist && chip->batt_exist &&
-		   (CHARGING_STATUS_FAIL != chip->charging_state) && chip->mmi_chg &&
-		   (chip->stop_chg == 1 || chip->charger_type == 5)) {
+		   (CHARGING_STATUS_FAIL != chip->charging_state) &&
+		   (chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP)) {
 		chip->sleep_tm_sec = 0;
 		chip->prop_status = POWER_SUPPLY_STATUS_CHARGING;
 		if (chip->soc == chip->ui_soc) {
@@ -2343,31 +2173,6 @@ static void battery_update(struct oppo_chg_chip *chip)
 static void oppo_chg_battery_update_status(struct oppo_chg_chip *chip)
 {
 	battery_update(chip);
-}
-
-static void oppo_chg_get_chargerid_voltage(struct oppo_chg_chip *chip)
-{
-	if (chip->chg_ops->set_chargerid_switch_val == NULL ||
-	    chip->chg_ops->get_chargerid_switch_val == NULL ||
-	    chip->chg_ops->get_chargerid_volt == NULL) {
-		return;
-	} else if (chip->charger_type != POWER_SUPPLY_TYPE_USB_DCP) {
-		return;
-	}
-
-	if (chip->chargerid_volt_got == false) {
-		chip->chg_ops->set_chargerid_switch_val(chip, 1);
-		usleep_range(20000, 22000);
-		chip->chargerid_volt = chip->chg_ops->get_chargerid_volt(chip);
-		chip->chargerid_volt_got = true;
-		chip->chg_ops->set_chargerid_switch_val(chip, 0);
-	} else {
-		if (chip->chg_ops->get_chargerid_switch_val(chip) == 1) {
-			chip->chg_ops->set_chargerid_switch_val(chip, 0);
-		} else {
-			/* do nothing*/
-		}
-	}
 }
 
 #define FULL_COUNTS_SW 5
@@ -2702,7 +2507,6 @@ static void oppo_chg_update_work(struct work_struct *work)
 		oppo_chg_protection_check(chip);
 		oppo_chg_battery_notify_check(chip);
 		oppo_chg_check_status_full(chip);
-		oppo_chg_get_chargerid_voltage(chip);
 	}
 	oppo_chg_ibatt_check_and_set(chip);
 
@@ -2726,51 +2530,6 @@ bool oppo_chg_wake_update_work(void)
 	return true;
 }
 
-void oppo_chg_disable_charge(void)
-{
-	if (!g_oppo_chg_chip) {
-		return;
-	}
-
-	g_oppo_chg_chip->chg_ops->charging_disable(g_oppo_chg_chip);
-}
-
-void oppo_chg_unsuspend_charger(void)
-{
-	if (!g_oppo_chg_chip) {
-		return;
-	}
-
-	g_oppo_chg_chip->chg_ops->charger_unsuspend(g_oppo_chg_chip);
-}
-
-int oppo_chg_get_batt_volt(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 4000;
-	} else {
-		return g_oppo_chg_chip->batt_volt;
-	}
-}
-
-int oppo_chg_get_ui_soc(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 50;
-	} else {
-		return g_oppo_chg_chip->ui_soc;
-	}
-}
-
-int oppo_chg_get_soc(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 50;
-	} else {
-		return g_oppo_chg_chip->soc;
-	}
-}
-
 void oppo_chg_soc_update_when_resume(unsigned long sleep_tm_sec)
 {
 	if (!g_oppo_chg_chip) {
@@ -2787,122 +2546,4 @@ void oppo_chg_soc_update(void)
 		return;
 	}
 	oppo_chg_update_ui_soc(g_oppo_chg_chip);
-}
-
-int oppo_chg_get_chg_type(void)
-{
-	if (!g_oppo_chg_chip) {
-		return POWER_SUPPLY_TYPE_UNKNOWN;
-	} else {
-		return g_oppo_chg_chip->charger_type;
-	}
-}
-
-int oppo_chg_get_chg_temperature(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 250;
-	} else {
-		return g_oppo_chg_chip->temperature;
-	}
-}
-
-int oppo_chg_get_notify_flag(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 0;
-	} else {
-		return g_oppo_chg_chip->notify_flag;
-	}
-}
-
-bool oppo_chg_get_batt_full(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 0;
-	} else {
-		return g_oppo_chg_chip->batt_full;
-	}
-}
-
-bool oppo_chg_get_rechging_status(void)
-{
-	if (!g_oppo_chg_chip) {
-		return 0;
-	} else {
-		return g_oppo_chg_chip->in_rechging;
-	}
-}
-
-bool oppo_chg_check_chip_is_null(void)
-{
-	if (!g_oppo_chg_chip) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
-void oppo_chg_set_charger_type_unknown(void)
-{
-	if (g_oppo_chg_chip) {
-		g_oppo_chg_chip->charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
-	}
-}
-
-int oppo_chg_get_charger_voltage(void)
-{
-	if (!g_oppo_chg_chip) {
-		return -500;
-	} else {
-		return g_oppo_chg_chip->chg_ops->get_charger_volt();
-	}
-}
-
-void oppo_chg_set_chargerid_switch_val(int value)
-{
-	if (g_oppo_chg_chip && g_oppo_chg_chip->chg_ops->set_chargerid_switch_val) {
-		g_oppo_chg_chip->chg_ops->set_chargerid_switch_val(g_oppo_chg_chip, value);
-	}
-}
-
-void oppo_chg_clear_chargerid_info(void)
-{
-	if (g_oppo_chg_chip && g_oppo_chg_chip->chg_ops->set_chargerid_switch_val) {
-		g_oppo_chg_chip->chargerid_volt = 0;
-		g_oppo_chg_chip->chargerid_volt_got = false;
-	}
-}
-
-void oppo_set_usb_shell_ctrl(int value)
-{
-	if (g_oppo_chg_chip && g_oppo_chg_chip->usb_shell_ctrl == false) {
-		return;
-	}
-	if (g_oppo_chg_chip && g_oppo_chg_chip->chg_ops->set_usb_shell_ctrl_val) {
-		g_oppo_chg_chip->chg_ops->set_usb_shell_ctrl_val(g_oppo_chg_chip, value);
-	}
-}
-int oppo_get_usb_shell_ctrl(void)
-{
-	if (g_oppo_chg_chip && g_oppo_chg_chip->usb_shell_ctrl == false) {
-		return -1;
-	}
-	if (g_oppo_chg_chip && g_oppo_chg_chip->chg_ops->get_usb_shell_ctrl_val) {
-		return g_oppo_chg_chip->chg_ops->get_usb_shell_ctrl_val(g_oppo_chg_chip);
-	} else {
-		return -1;
-	}
-}
-
-int oppo_is_rf_ftm_mode(void)
-{
-	int boot_mode = get_boot_mode();
-
-	if (boot_mode == MSM_BOOT_MODE__RF || boot_mode == MSM_BOOT_MODE__WLAN ||
-	    boot_mode == MSM_BOOT_MODE__FACTORY) {
-		return true;
-	} else {
-		return false;
-	}
 }

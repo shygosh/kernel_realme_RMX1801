@@ -35,10 +35,6 @@
 				__func__, ##__VA_ARGS__);	\
 	} while (0)
 
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-void smbchg_set_chargerid_switch_val(struct oppo_chg_chip *chip, int value);
-#endif
-
 static bool is_secure(struct smb_charger *chg, int addr)
 {
 	if (addr == SHIP_MODE_REG || addr == FREQ_CLK_DIV_REG)
@@ -829,9 +825,6 @@ int smblib_rerun_apsd_if_required(struct smb_charger *chg)
 {
 	union power_supply_propval val;
 	int rc;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	const struct apsd_result *apsd_result;
-#endif
 
 	rc = smblib_get_prop_usb_present(chg, &val);
 	if (rc < 0) {
@@ -841,15 +834,6 @@ int smblib_rerun_apsd_if_required(struct smb_charger *chg)
 
 	if (!val.intval)
 		return 0;
-
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* if type is not usb or unknown no need to rerun apsd */
-	apsd_result = smblib_get_apsd_result(chg);
-	if (apsd_result->pst != POWER_SUPPLY_TYPE_UNKNOWN &&
-	    apsd_result->pst != POWER_SUPPLY_TYPE_USB &&
-	    apsd_result->pst != POWER_SUPPLY_TYPE_USB_CDP)
-		return 0;
-#endif
 
 	rc = smblib_request_dpdm(chg, true);
 	if (rc < 0)
@@ -3758,9 +3742,6 @@ void smblib_usb_plugin_hard_reset_locked(struct smb_charger *chg)
 #ifdef CONFIG_OPPO_VENDOR_EDIT
 		/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging */
 		if (g_oppo_chg_chip) {
-			smbchg_set_chargerid_switch_val(g_oppo_chg_chip, 0);
-			g_oppo_chg_chip->chargerid_volt = 0;
-			g_oppo_chg_chip->chargerid_volt_got = false;
 			g_oppo_chg_chip->charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
 			oppo_chg_wake_update_work();
 		}
@@ -3852,9 +3833,6 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 #ifdef CONFIG_OPPO_VENDOR_EDIT
 		/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/22, sjc Add for charging */
 		if (g_oppo_chg_chip) {
-			smbchg_set_chargerid_switch_val(g_oppo_chg_chip, 0);
-			g_oppo_chg_chip->chargerid_volt = 0;
-			g_oppo_chg_chip->chargerid_volt_got = false;
 			g_oppo_chg_chip->charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
 			oppo_chg_wake_update_work();
 		}
@@ -4265,9 +4243,6 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 	struct smb_charger *chg = irq_data->parent_data;
 	int rc = 0;
 	u8 stat;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	u8 reg_value = 0;
-#endif
 
 	if (chg->fake_usb_insertion)
 		return IRQ_HANDLED;
@@ -4282,7 +4257,6 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 	if ((chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB)
 			&& (stat & APSD_DTC_STATUS_DONE_BIT)
 			&& !chg->uusb_apsd_rerun_done) {
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 		/*
 		 * Force re-run APSD to handle slow insertion related
 		 * charger-mis-detection.
@@ -4290,15 +4264,6 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 		chg->uusb_apsd_rerun_done = true;
 		smblib_rerun_apsd(chg);
 		return IRQ_HANDLED;
-#else
-		/* Jianchao.Shi@BSP.CHG.Basic, 2017/06/19, sjc Modify to rerun apsd */
-		smblib_read(chg, APSD_RESULT_STATUS_REG, &reg_value);
-		if (reg_value & (CDP_CHARGER_BIT | SDP_CHARGER_BIT)) {
-			chg->uusb_apsd_rerun_done = true;
-			smblib_rerun_apsd(chg);
-			return IRQ_HANDLED;
-		}
-#endif
 	}
 
 	smblib_handle_apsd_done(chg,
@@ -5520,7 +5485,7 @@ static void oppo_chg_monitor_work(struct work_struct *work)
 	int rc;
 	u8 stat;
 
-	if (!chip || !chip->charger_exist || !chip->batt_exist || !chip->mmi_chg)
+	if (!chip || !chip->charger_exist || !chip->batt_exist)
 		return;
 	if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB || chg->real_charger_type == POWER_SUPPLY_TYPE_USB_CDP)
 		return;
