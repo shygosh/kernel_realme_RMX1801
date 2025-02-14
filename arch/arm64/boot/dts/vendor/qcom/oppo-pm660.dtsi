@@ -4,35 +4,12 @@
 	qcom,clear-warm-reset;
 };
 
-&pm660_gpios {
-	gpio2_adc {
-		gpio2_adc_default: gpio2_adc_default {
-			pins = "gpio2";
-			function = "normal";
-			bias-high-impedance;
-		};
-	};
-};
-
-&pm660_vadc{
-	gpio2_adc {
-		reg = <ADC7_VDC_16>;
-		label = "gpio2_adc";
-		qcom,decimation = <2>;
-		qcom,scale-fn-type = <0>;
-		qcom,hw-settle-time = <2>;
-		qcom,pre-scaling = <1 1>;
-	};
-};
-
 &pm660_charger {
 	qcom,hvdcp-disable;
 	qcom,ufp-only-mode;
 	qcom,pd-not-supported;
 	qcom,disable-stat-sw-override;
 	qcom,float-option = <1>;
-	qcom,pm660chg-vadc = <&pm660_vadc>;
-	qcom,pm660l-bob-supply = <&pm660l_bob>;
 
 	//for smb2:
 	qcom,usb-icl-ua = <2000000>;
@@ -101,21 +78,6 @@
 	qcom,chg_ctrl_by_camera;
 	qcom,chg_ctrl_by_calling;
 	qcom,sw_vfloat_over_protect_enable;
-	qcom,chargerid_switch-gpio = <&tlmm 65 0x00>;
-
-	pinctrl-names = "chargerid_switch_active",
-			"chargerid_switch_sleep",
-			"chargerid_switch_default",
-			"usbid_active",
-			"usbid_sleep",
-			"shortc_active";
-
-	pinctrl-0 = <&chargerid_switch_active>;
-	pinctrl-1 = <&chargerid_switch_sleep>;
-	pinctrl-2 = <&chargerid_switch_default>;
-	pinctrl-3 = <&usbid_active>;
-	pinctrl-4 = <&usbid_sleep>;
-	pinctrl-5 = <&shortc_active>;
 };
 
 &pm660_fg {
