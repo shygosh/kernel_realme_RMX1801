@@ -946,8 +946,6 @@ static int smb2_init_usb_main_psy(struct smb2 *chip)
  * DC PSY REGISTRATION   *
  *************************/
 
-#ifndef CONFIG_OPPO_VENDOR_EDIT
-/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Delete for charging */
 static enum power_supply_property smb2_dc_props[] = {
 	POWER_SUPPLY_PROP_INPUT_SUSPEND,
 	POWER_SUPPLY_PROP_PRESENT,
@@ -1032,7 +1030,11 @@ static int smb2_dc_prop_is_writeable(struct power_supply *psy,
 
 static const struct power_supply_desc dc_psy_desc = {
 	.name = "dc",
+#ifndef CONFIG_OPPO_VENDOR_EDIT
 	.type = POWER_SUPPLY_TYPE_WIRELESS,
+#else
+	.type = POWER_SUPPLY_TYPE_MAINS,
+#endif
 	.properties = smb2_dc_props,
 	.num_properties = ARRAY_SIZE(smb2_dc_props),
 	.get_property = smb2_dc_get_prop,
@@ -1057,71 +1059,6 @@ static int smb2_init_dc_psy(struct smb2 *chip)
 
 	return 0;
 }
-
-#else
-/* Jianchao.Shi@BSP.CHG.Basic, 2017/03/07, sjc Add for charging*/
-
-/*************************
- * AC PSY REGISTRATION *
- *************************/
-static enum power_supply_property ac_props[] = {
-	POWER_SUPPLY_PROP_ONLINE,
-};
-
-static int ac_get_property(struct power_supply *psy,
-	enum power_supply_property psp,
-	union power_supply_propval *val)
-{
-	int rc = 0;
-
-	if (!g_oppo_chg_chip)
-		return -EINVAL;
-
-	if (g_oppo_chg_chip->charger_exist) {
-		if (g_oppo_chg_chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP) {
-			g_oppo_chg_chip->ac_online = true;
-		} else {
-			g_oppo_chg_chip->ac_online = false;
-		}
-	}
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_ONLINE:
-		val->intval = g_oppo_chg_chip->ac_online;
-		 break;
-	default:
-		rc = -EINVAL;
-		break;
-	}
-	return rc;
-}
-
-static const struct power_supply_desc ac_psy_desc = {
-	.name = "ac",
-	.type = POWER_SUPPLY_TYPE_MAINS,
-	.properties = ac_props,
-	.num_properties = ARRAY_SIZE(ac_props),
-	.get_property = ac_get_property,
-};
-
-static int smb2_init_ac_psy(struct smb2 *chip)
-{
-	struct power_supply_config ac_cfg = {};
-	struct smb_charger *chg = &chip->chg;
-
-	ac_cfg.drv_data = chip;
-	ac_cfg.of_node = chg->dev->of_node;
-	chg->ac_psy = devm_power_supply_register(chg->dev,
-						  &ac_psy_desc,
-						  &ac_cfg);
-	if (IS_ERR(chg->ac_psy)) {
-		pr_err("Couldn't register AC power supply\n");
-		return PTR_ERR(chg->ac_psy);
-	}
-
-	return 0;
-}
-#endif
 
 /*************************
  * BATT PSY REGISTRATION *
@@ -2678,12 +2615,7 @@ static int force_dc_psy_update_write(void *data, u64 val)
 {
 	struct smb_charger *chg = data;
 
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 	power_supply_changed(chg->dc_psy);
-#else
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/05/09, sjc Add for charging */
-	power_supply_changed(chg->ac_psy);
-#endif
 	return 0;
 }
 DEFINE_DEBUGFS_ATTRIBUTE(force_dc_psy_update_ops, NULL,
@@ -2850,13 +2782,7 @@ static int smb2_probe(struct platform_device *pdev)
 		goto cleanup;
 	}
 
-#ifndef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Delete for charging*/
 	rc = smb2_init_dc_psy(chip);
-#else
-	/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Add for charging*/
-	rc = smb2_init_ac_psy(chip);
-#endif
 	if (rc < 0) {
 		pr_err("Couldn't initialize dc psy rc=%d\n", rc);
 		goto cleanup;
@@ -3004,13 +2930,8 @@ cleanup:
 		power_supply_unregister(chg->usb_psy);
 	if (chg->usb_port_psy)
 		power_supply_unregister(chg->usb_port_psy);
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 	if (chg->dc_psy)
 		power_supply_unregister(chg->dc_psy);
-#else
-	if (chg->ac_psy)
-		power_supply_unregister(chg->ac_psy);
-#endif
 	if (chg->vconn_vreg && chg->vconn_vreg->rdev)
 		devm_regulator_unregister(chg->dev, chg->vconn_vreg->rdev);
 	if (chg->vbus_vreg && chg->vbus_vreg->rdev)

@@ -262,10 +262,6 @@ struct smb_charger {
 	struct power_supply_desc	usb_psy_desc;
 	struct power_supply		*usb_main_psy;
 	struct power_supply		*usb_port_psy;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/03/07, sjc Add for charging*/
-	struct power_supply		*ac_psy;
-#endif
 	enum power_supply_type		real_charger_type;
 
 	/* notifiers */

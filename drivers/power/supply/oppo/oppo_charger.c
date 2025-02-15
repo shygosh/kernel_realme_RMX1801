@@ -320,7 +320,7 @@ int oppo_chg_init(struct oppo_chg_chip *chip)
 	int rc = 0;
 	struct power_supply *usb_psy;
 	struct power_supply *batt_psy;
-	struct power_supply *ac_psy;
+	struct power_supply *dc_psy;
 
 	if (!chip->chg_ops) {
 		dev_err(chip->dev, "charger operations cannot be NULL\n");
@@ -337,12 +337,12 @@ int oppo_chg_init(struct oppo_chg_chip *chip)
 
 	chip->usb_psy = usb_psy;
 
-	ac_psy = power_supply_get_by_name("ac");
-	if (!ac_psy) {
-		dev_err(chip->dev, "ac psy not found; deferring probe\n");
-		goto ac_psy_reg_failed;
+	dc_psy = power_supply_get_by_name("dc");
+	if (!dc_psy) {
+		dev_err(chip->dev, "dc psy not found; deferring probe\n");
+		goto dc_psy_reg_failed;
 	}
-	chip->ac_psy = ac_psy;
+	chip->dc_psy = dc_psy;
 
 	batt_psy = power_supply_get_by_name("battery");
 	if (!batt_psy) {
@@ -379,7 +379,7 @@ int oppo_chg_init(struct oppo_chg_chip *chip)
 
 	return 0;
 batt_psy_reg_failed:
-ac_psy_reg_failed:
+dc_psy_reg_failed:
 usb_psy_reg_failed:
 
 	return rc;
@@ -408,12 +408,6 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 	}
 
 	/*hardware init*/
-	rc = of_property_read_u32(node, "qcom,input_current_charger_ma",
-				  &chip->limits.input_current_charger_ma);
-	if (rc) {
-		chip->limits.input_current_charger_ma = OPCHG_INPUT_CURRENT_LIMIT_CHARGER_MA;
-	}
-
 	rc = of_property_read_u32(node, "qcom,input_current_usb_ma",
 				  &chip->limits.input_current_usb_ma);
 	if (rc) {
@@ -778,9 +772,6 @@ static void oppo_chg_set_input_current_limit(struct oppo_chg_chip *chip)
 	switch (chip->charger_type) {
 	case POWER_SUPPLY_TYPE_USB:
 		current_limit = chip->limits.input_current_usb_ma;
-		break;
-	case POWER_SUPPLY_TYPE_USB_DCP:
-		current_limit = chip->limits.input_current_charger_ma;
 		break;
 	default:
 		return;
@@ -1977,7 +1968,7 @@ static void oppo_chg_update_ui_soc(struct oppo_chg_chip *chip)
 		soc_up_limit = SOC_SYNC_UP_RATE_10S;
 	}
 	if (chip->charger_exist && chip->batt_exist && chip->batt_full &&
-	    chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP) {
+	    chip->charger_type == POWER_SUPPLY_TYPE_USB) {
 		chip->sleep_tm_sec = 0;
 		if ((chip->tbatt_status == BATTERY_STATUS__NORMAL) ||
 		    (chip->tbatt_status == BATTERY_STATUS__LITTLE_COOL_TEMP) ||
@@ -2000,7 +1991,7 @@ static void oppo_chg_update_ui_soc(struct oppo_chg_chip *chip)
 		}
 	} else if (chip->charger_exist && chip->batt_exist &&
 		   (CHARGING_STATUS_FAIL != chip->charging_state) &&
-		   (chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP)) {
+		   (chip->charger_type == POWER_SUPPLY_TYPE_USB)) {
 		chip->sleep_tm_sec = 0;
 		chip->prop_status = POWER_SUPPLY_STATUS_CHARGING;
 		if (chip->soc == chip->ui_soc) {
@@ -2234,7 +2225,7 @@ static void oppo_chg_critical_log(struct oppo_chg_chip *chip)
 	static int chg_abnormal_count = 0;
 
 	if (chip->charger_exist) {
-		if (chip->stop_voter == 0 && chip->charger_type == POWER_SUPPLY_TYPE_USB_DCP &&
+		if (chip->stop_voter == 0 && chip->charger_type == POWER_SUPPLY_TYPE_USB &&
 		    chip->soc <= 75 && chip->icharging >= -20) {
 			chg_abnormal_count++;
 			if (chg_abnormal_count >= CHARGER_ABNORMAL_DETECT_TIME) {

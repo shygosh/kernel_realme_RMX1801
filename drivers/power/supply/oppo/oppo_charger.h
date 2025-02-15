@@ -142,7 +142,6 @@ struct tbatt_anti_shake {
 };
 
 struct oppo_chg_limits {
-	int input_current_charger_ma;
 	int input_current_usb_ma;
 	int input_current_led_ma;
 	int input_current_led_ma_forcmcc;
@@ -237,7 +236,7 @@ struct oppo_chg_chip {
 	struct device *dev;
 	const struct oppo_chg_operations *chg_ops;
 
-	struct power_supply *ac_psy;
+	struct power_supply *dc_psy;
 
 	struct power_supply *usb_psy;
 	struct qcom_pmic pmic_spmi;
