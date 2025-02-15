@@ -111,9 +111,7 @@ static void oppo_chg_clear_suspend(void)
 
 static void oppo_chg_check_clear_suspend(void)
 {
-	use_present_status = true;
 	oppo_chg_clear_suspend();
-	use_present_status = false;
 }
 
 static int usb_icl[] = {

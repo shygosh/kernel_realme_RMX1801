@@ -437,11 +437,6 @@ static enum power_supply_property smb2_usb_props[] = {
 	POWER_SUPPLY_PROP_MOISTURE_DETECTED,
 };
 
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-/* Jianchao.Shi@BSP.CHG.Basic, 2017/04/26, sjc Add for charging */
-static bool use_present_status = false;
-#endif
-
 static int smb2_usb_get_prop(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -458,13 +453,6 @@ static int smb2_usb_get_prop(struct power_supply *psy,
 			rc = smblib_get_prop_usb_present(chg, val);
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-		/* Jianchao.Shi@BSP.CHG.Basic, 2017/04/26, sjc Modify for charging */
-		if (use_present_status)
-			rc = smblib_get_prop_usb_present(chg, val);
-		else
-			rc = smblib_get_prop_usb_online(chg, val);
-#else
 		rc = smblib_get_prop_usb_online(chg, val);
 		if (!val->intval)
 			break;
@@ -477,7 +465,6 @@ static int smb2_usb_get_prop(struct power_supply *psy,
 			val->intval = 1;
 		if (chg->real_charger_type == POWER_SUPPLY_TYPE_UNKNOWN)
 			val->intval = 0;
-#endif
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		rc = smblib_get_prop_usb_voltage_max(chg, val);
