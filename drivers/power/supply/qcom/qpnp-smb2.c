@@ -2978,10 +2978,6 @@ static struct platform_driver smb2_driver = {
 	.driver		= {
 		.name		= "qcom,qpnp-smb2",
 		.of_match_table	= match_table,
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-		/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/25, sjc Add for charging */
-		.pm		= &smb2_pm_ops,
-#endif
 	},
 	.probe		= smb2_probe,
 	.remove		= smb2_remove,
