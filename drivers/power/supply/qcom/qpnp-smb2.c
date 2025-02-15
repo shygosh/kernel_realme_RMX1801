@@ -1120,8 +1120,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 				val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
 			else
 				val->intval = g_oppo_chg_chip->prop_status;
-		} else {
-			rc = smblib_get_prop_batt_status(chg, val);
 		}
 #else
 		rc = smblib_get_prop_batt_status(chg, val);
@@ -1132,8 +1130,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Modify for charging */
 		if (g_oppo_chg_chip)
 			val->intval = oppo_chg_get_prop_batt_health(g_oppo_chg_chip);
-		else
-			rc = smblib_get_prop_batt_health(chg, val);
 #else
 		rc = smblib_get_prop_batt_health(chg, val);
 #endif
@@ -1143,8 +1139,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Modify for charging */
 		if (g_oppo_chg_chip)
 			val->intval = g_oppo_chg_chip->batt_exist;
-		else
-			rc = smblib_get_prop_batt_present(chg, val);
 #else
 		rc = smblib_get_prop_batt_present(chg, val);
 #endif
@@ -1160,8 +1154,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		/* Jianchao.Shi@BSP.CHG.Basic, 2016/12/26, sjc Modify for charging */
 		if (g_oppo_chg_chip)
 			val->intval = g_oppo_chg_chip->ui_soc;
-		else
-			rc = smblib_get_prop_batt_capacity(chg, val);
 #else
 		rc = smblib_get_prop_batt_capacity(chg, val);
 #endif
@@ -1257,8 +1249,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		// shygosh: Port charging counter
 		if (g_oppo_chg_chip)
 			val->intval = g_oppo_chg_chip->ui_soc * g_oppo_chg_chip->batt_capacity_mah * 1000 / 100;
-		else
-			rc = smblib_get_prop_from_bms(chg, psp, val);
 		break;
 #endif
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
@@ -1304,10 +1294,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		if (g_oppo_chg_chip) {
 			g_oppo_chg_chip->icharging = oppo_gauge_get_batt_current();
 			val->intval = g_oppo_chg_chip->icharging;
-		} else {
-			rc = smblib_get_prop_from_bms(chg, psp, val);
-			if (!rc)
-				val->intval *= (-1);
 		}
 #else
 		rc = smblib_get_prop_from_bms(chg, psp, val);
