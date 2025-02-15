@@ -20,9 +20,7 @@
 	qcom,input_current_usb_ma = <500>;
 	qcom,input_current_led_ma = <1200>;
 	qcom,input_current_led_ma_forcmcc = <500>;
-	qcom,input_current_camera_ma = <1200>;
 	qcom,input_current_led_ma_overtemp = <900>;
-	qcom,input_current_calling_ma = <1500>;
 	qcom,overtemp_bat_decidegc = <350>;
 	qcom,iterm-disabled = <0>;
 	qcom,iterm-ma = <200>;
@@ -75,8 +73,6 @@
 	//for control:
 	qcom,check_batt_full_by_sw;
 	qcom,chg_ctrl_by_lcd;
-	qcom,chg_ctrl_by_camera;
-	qcom,chg_ctrl_by_calling;
 	qcom,sw_vfloat_over_protect_enable;
 };
 
