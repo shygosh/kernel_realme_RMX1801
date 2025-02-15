@@ -1174,8 +1174,6 @@ static enum power_supply_property smb2_batt_props[] = {
 	POWER_SUPPLY_PROP_BATTERY_CC,
 	POWER_SUPPLY_PROP_BATTERY_RM,
 	POWER_SUPPLY_PROP_BATTERY_NOTIFY_CODE,
-	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
-	POWER_SUPPLY_PROP_CALL_MODE,
 #endif
 };
 
@@ -1450,10 +1448,6 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		else
 			val->intval = 0;
 		break;
-	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
-	case POWER_SUPPLY_PROP_CALL_MODE:
-		val->intval = g_oppo_chg_chip->calling_on;
-		break;
 #endif
 	default:
 		pr_err("batt power supply prop %d not supported\n", psp);
@@ -1556,12 +1550,6 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 		chg->die_health = val->intval;
 		power_supply_changed(chg->batt_psy);
 		break;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
-	case POWER_SUPPLY_PROP_CALL_MODE:
-		g_oppo_chg_chip->calling_on = val->intval;
-		break;
-#endif
 	default:
 		rc = -EINVAL;
 	}
@@ -1584,10 +1572,6 @@ static int smb2_batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STEP_CHARGING_ENABLED:
 	case POWER_SUPPLY_PROP_SW_JEITA_ENABLED:
 	case POWER_SUPPLY_PROP_DIE_HEALTH:
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Ji.Xu@SW.BSP.CHG, 2018-9-3 add chg current at calling */
-	case POWER_SUPPLY_PROP_CALL_MODE:
-#endif
 		return 1;
 	default:
 		break;

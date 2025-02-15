@@ -44,7 +44,6 @@
 #define OPCHG_INPUT_CURRENT_LIMIT_USB_MA 500
 #define OPCHG_INPUT_CURRENT_LIMIT_LED_MA 1200
 #define OPCHG_INPUT_CURRENT_LIMIT_CAMERA_MA 1000
-#define OPCHG_INPUT_CURRENT_LIMIT_CALLING_MA 1200
 
 #define OPCHG_FAST_CHG_MAX_MA 2000
 
@@ -148,8 +147,6 @@ struct oppo_chg_limits {
 	int input_current_led_ma;
 	int input_current_led_ma_forcmcc;
 	int input_current_led_ma_overtemp;
-	int input_current_camera_ma;
-	int input_current_calling_ma;
 
 	int iterm_ma;
 	bool iterm_disabled;
@@ -296,16 +293,12 @@ struct oppo_chg_chip {
 
 	bool led_on;
 	bool led_status_change;
-	bool camera_on;
-	bool calling_on;
 	bool ac_online;
 
 	bool suspend_after_full;
 	bool check_batt_full_by_sw;
 	bool external_gauge;
 	bool chg_ctrl_by_lcd;
-	bool chg_ctrl_by_camera;
-	bool chg_ctrl_by_calling;
 	bool fg_bcl_poll;
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend chg_early_suspend;

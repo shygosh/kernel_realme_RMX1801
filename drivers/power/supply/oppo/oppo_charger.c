@@ -436,28 +436,11 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 		chip->limits.input_current_led_ma_forcmcc = 500;
 	}
 
-	rc = of_property_read_u32(node, "qcom,input_current_camera_ma",
-				  &chip->limits.input_current_camera_ma);
-	if (rc) {
-#ifdef CONFIG_OPPO_SPECIAL_BUILD
-		chip->limits.input_current_camera_ma = OPCHG_INPUT_CURRENT_LIMIT_CAMERA_MA;
-
-#else
-		chip->limits.input_current_usb_ma = OPCHG_INPUT_CURRENT_LIMIT_CAMERA_MA;
-#endif
-	}
-
 	chip->limits.iterm_disabled = of_property_read_bool(node, "qcom,iterm-disabled");
 
 	rc = of_property_read_u32(node, "qcom,iterm-ma", &chip->limits.iterm_ma);
 	if (rc < 0) {
 		chip->limits.iterm_ma = -EINVAL;
-	}
-
-	rc = of_property_read_u32(node, "qcom,input_current_calling_ma",
-				  &chip->limits.input_current_calling_ma);
-	if (rc) {
-		chip->limits.input_current_calling_ma = OPCHG_INPUT_CURRENT_LIMIT_CALLING_MA;
 	}
 
 	rc = of_property_read_u32(node, "qcom,recharge-mv", &chip->limits.recharge_mv);
@@ -737,8 +720,6 @@ int oppo_chg_parse_dt(struct oppo_chg_chip *chip)
 	chip->external_gauge = of_property_read_bool(node, "qcom,external_gauge");
 	chip->fg_bcl_poll = of_property_read_bool(node, "qcom,fg_bcl_poll_enable");
 	chip->chg_ctrl_by_lcd = of_property_read_bool(node, "qcom,chg_ctrl_by_lcd");
-	chip->chg_ctrl_by_camera = of_property_read_bool(node, "qcom,chg_ctrl_by_camera");
-	chip->chg_ctrl_by_calling = of_property_read_bool(node, "qcom,chg_ctrl_by_calling");
 
 	return 0;
 }
@@ -808,19 +789,6 @@ static void oppo_chg_set_input_current_limit(struct oppo_chg_chip *chip)
 	if ((chip->chg_ctrl_by_lcd) && (chip->led_on) &&
 	    (current_limit > chip->limits.input_current_led_ma)) {
 		current_limit = chip->limits.input_current_led_ma;
-
-		if ((chip->chg_ctrl_by_camera) && (chip->camera_on) &&
-		    (current_limit > chip->limits.input_current_camera_ma)) {
-			current_limit = chip->limits.input_current_camera_ma;
-		}
-	} else if ((chip->chg_ctrl_by_camera) && (chip->camera_on) &&
-		   (current_limit > chip->limits.input_current_camera_ma)) {
-		current_limit = chip->limits.input_current_camera_ma;
-	}
-
-	if ((chip->chg_ctrl_by_calling) && (chip->calling_on) &&
-	    (current_limit > chip->limits.input_current_calling_ma)) {
-		current_limit = chip->limits.input_current_calling_ma;
 	}
 
 	if ((chip->led_on) && (chip->limits.input_current_led_ma_overtemp != -EINVAL) &&
@@ -1433,30 +1401,10 @@ void oppo_chg_set_led_status(bool val)
 EXPORT_SYMBOL(oppo_chg_set_led_status);
 #endif
 
-void oppo_chg_set_camera_status(bool val)
-{
-	if (!g_oppo_chg_chip) {
-		return;
-	} else {
-		g_oppo_chg_chip->camera_on = val;
-	}
-}
-EXPORT_SYMBOL(oppo_chg_set_camera_status);
-
 static void oppo_chg_check_led_on_ichging(struct oppo_chg_chip *chip)
 {
 	if (chip->led_status_change) {
 		chip->led_status_change = false;
-		oppo_chg_set_input_current_limit(chip);
-	}
-}
-
-static void oppo_chg_check_camera_on_ichging(struct oppo_chg_chip *chip)
-{
-	static bool camera_pre = false;
-
-	if (chip->camera_on != camera_pre) {
-		camera_pre = chip->camera_on;
 		oppo_chg_set_input_current_limit(chip);
 	}
 }
@@ -1478,16 +1426,6 @@ static void oppo_chg_check_temp_ichging(struct oppo_chg_chip *chip)
 			chip->limits.overtemp_bat_decidegc = chip->anti_shake_bound.overtemp_bound;
 			oppo_chg_set_input_current_limit(chip);
 		}
-	}
-}
-
-static void oppo_chg_check_calling_on_ichging(struct oppo_chg_chip *chip)
-{
-	static bool calling_pre = false;
-
-	if (chip->calling_on != calling_pre) {
-		calling_pre = chip->calling_on;
-		oppo_chg_set_input_current_limit(chip);
 	}
 }
 
@@ -1573,7 +1511,6 @@ static void oppo_chg_variables_init(struct oppo_chg_chip *chip)
 	chip->request_power_off = 0;
 	chip->tbatt_pre_shake = TBATT_PRE_SHAKE_INVALID;
 	chip->led_on = true;
-	chip->camera_on = 0;
 	chip->stop_voter = 0x00;
 	chip->charging_state = CHARGING_STATUS_CCCV;
 	chip->anti_shake_bound.cold_bound = chip->limits.cold_bat_decidegc;
@@ -1823,14 +1760,6 @@ static void oppo_chg_protection_check(struct oppo_chg_chip *chip)
 
 	if (chip->chg_ctrl_by_lcd) {
 		oppo_chg_check_led_on_ichging(chip);
-	}
-
-	if (chip->chg_ctrl_by_camera) {
-		oppo_chg_check_camera_on_ichging(chip);
-	}
-
-	if (chip->chg_ctrl_by_calling) {
-		oppo_chg_check_calling_on_ichging(chip);
 	}
 
 	if (chip->limits.input_current_led_ma_overtemp != -EINVAL) {
