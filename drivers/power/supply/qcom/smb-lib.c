@@ -128,7 +128,6 @@ static int smblib_get_jeita_cc_delta(struct smb_charger *chg, int *cc_delta_ua)
 
 int smblib_icl_override(struct smb_charger *chg, bool override)
 {
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 	int rc;
 
 	rc = smblib_masked_write(chg, USBIN_LOAD_CFG_REG,
@@ -138,41 +137,6 @@ int smblib_icl_override(struct smb_charger *chg, bool override)
 		smblib_err(chg, "Couldn't override ICL rc=%d\n", rc);
 
 	return rc;
-#else
-	int rc;
-	bool override_status;
-	u8 stat;
-	u16 reg;
-
-	switch (chg->chg_param.smb_version) {
-	case PMI8998_SUBTYPE:
-		reg = APSD_RESULT_STATUS_REG;
-		break;
-	case PM660_SUBTYPE:
-		reg = AICL_STATUS_REG;
-		break;
-	default:
-		smblib_dbg(chg, PR_MISC, "Unknown chip version=%x\n", chg->chg_param.smb_version);
-		return -EINVAL;
-	}
-
-	rc = smblib_read(chg, reg, &stat);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't read reg=%x rc=%d\n", reg, rc);
-		return rc;
-	}
-
-	override_status = (bool)(stat & ICL_OVERRIDE_LATCH_BIT);
-	if (override != override_status) {
-		rc = smblib_masked_write(chg, CMD_APSD_REG, ICL_OVERRIDE_BIT, ICL_OVERRIDE_BIT);
-		if (rc < 0) {
-			smblib_err(chg, "Couldn't override ICL rc=%d\n", rc);
-			return rc;
-		}
-	}
-
-	return rc;
-#endif
 }
 
 int smblib_stat_sw_override_cfg(struct smb_charger *chg, bool override)
@@ -932,14 +896,6 @@ static int set_sdp_current(struct smb_charger *chg, int icl_ua)
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/01/20, sjc Add for charging */
-	if (icl_ua <= USBIN_150MA)
-		icl_options = 0;
-	else
-		icl_options = USB51_MODE_BIT;
-#endif
-
 	if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB &&
 		apsd_result->pst == POWER_SUPPLY_TYPE_USB_FLOAT) {
 		/*
@@ -991,16 +947,6 @@ int smblib_set_icl_current(struct smb_charger *chg, int icl_ua)
 {
 	int rc = 0;
 	bool override;
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	bool boot_mode = (get_boot_mode() == MSM_BOOT_MODE__RF) ||
-			 (get_boot_mode() == MSM_BOOT_MODE__WLAN);
-#endif
-
-#ifdef CONFIG_OPPO_VENDOR_EDIT
-	/* Jianchao.Shi@BSP.CHG.Basic, 2017/03/11, sjc Add for charging */
-	if (boot_mode)
-		icl_ua = 0;
-#endif
 
 	/* suspend and return if 25mA or less is requested */
 	if (icl_ua <= USBIN_25MA)
@@ -1018,12 +964,7 @@ int smblib_set_icl_current(struct smb_charger *chg, int icl_ua)
 			goto enable_icl_changed_interrupt;
 		}
 	} else {
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 		set_sdp_current(chg, 100000);
-#else
-		if (!boot_mode)
-			set_sdp_current(chg, 100000);
-#endif
 		rc = smblib_set_charge_param(chg, &chg->param.usb_icl, icl_ua);
 		if (rc < 0) {
 			smblib_err(chg, "Couldn't set HC ICL rc=%d\n", rc);
@@ -4878,9 +4819,7 @@ irqreturn_t smblib_handle_switcher_power_ok(int irq, void *data)
 {
 	struct smb_irq_data *irq_data = data;
 	struct smb_charger *chg = irq_data->parent_data;
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 	struct storm_watch *wdata = &irq_data->storm_data;
-#endif
 	int rc, usb_icl;
 	u8 stat;
 
@@ -4902,7 +4841,6 @@ irqreturn_t smblib_handle_switcher_power_ok(int irq, void *data)
 		return IRQ_HANDLED;
 
 	if (is_storming(&irq_data->storm_data)) {
-#ifndef CONFIG_OPPO_VENDOR_EDIT
 		/* This could be a weak charger reduce ICL */
 		if (!is_client_vote_enabled(chg->usb_icl_votable,
 						WEAK_CHARGER_VOTER)) {
@@ -4929,11 +4867,6 @@ irqreturn_t smblib_handle_switcher_power_ok(int irq, void *data)
 			schedule_delayed_work(&chg->bb_removal_work,
 				msecs_to_jiffies(BOOST_BACK_UNVOTE_DELAY_MS));
 		}
-#else
-		if (chg->real_charger_type != POWER_SUPPLY_TYPE_USB_CDP &&
-		    chg->real_charger_type != POWER_SUPPLY_TYPE_USB)
-			vote(chg->usb_icl_votable, BOOST_BACK_VOTER, true, 0);
-#endif
 	}
 
 	return IRQ_HANDLED;
